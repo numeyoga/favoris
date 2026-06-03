@@ -31,13 +31,42 @@ favoris (UI)  ─►  localStorage              (toujours, source rapide)
 | `index.js` | Enregistre les adapters, démarre le moteur, branche l'UI. |
 
 ### Ce qui est synchronisé
-- `favoris.spaces` (index des espaces)
-- `favoris.v1:<id>` (données de chaque espace : tags + liens)
+- `favoris.spaces` (index des espaces) — **filtré** : seuls les espaces
+  synchronisés y figurent une fois poussé (voir ci-dessous).
+- `favoris.v1:<id>` (données d'un espace : tags + liens) — **uniquement** si
+  l'espace est synchronisé.
 
 ### Ce qui reste local à l'appareil
 - `favoris.theme` (thème clair/sombre)
 - `favoris.currentSpace` (espace affiché)
 - `favoris.remote.config` et `favoris.sync.meta` (réglages de sync)
+- tout **espace marqué « local »** (contenu **et** nom) — voir ci-dessous.
+
+## Synchronisation par espace (opt-in)
+
+La synchronisation est **activable espace par espace**. Certains espaces
+contiennent des informations sensibles qui ne doivent jamais sortir du réseau
+sécurisé : ils restent **locaux par défaut**.
+
+- **Local par défaut** : un espace n'est synchronisé que si son drapeau
+  `synced === true`. Les espaces existants (sans drapeau) et les nouveaux sont
+  donc locaux tant qu'on n'active pas explicitement leur synchronisation.
+- **Invisibilité totale** : pour un espace local, ni son contenu
+  (`favoris.v1:<id>`) ni son **nom** ne partent vers le cloud. L'index poussé
+  (`favoris.spaces`) est filtré pour n'exposer que les espaces synchronisés
+  (`engine.js` → `_filterPushValue`). Au pull, l'index distant est fusionné
+  avec les espaces locaux pour ne pas les perdre (`_mergeSpacesIndex`).
+- **Basculer synchronisé → local** : envoie un *tombstone* qui **retire le
+  document du cloud** (`requestRemove`). Aucune trace ne reste en ligne.
+- **Basculer local → synchronisé** : (re)pousse le contenu (`requestPush`).
+- **Migration** : les espaces déjà synchronisés deviennent locaux par défaut
+  et cessent de pousser leurs mises à jour. Leurs données déjà présentes dans
+  le cloud **ne sont pas** supprimées automatiquement (seul un basculement
+  explicite le fait) ; réactiver la synchro reprend là où elle s'était arrêtée.
+- **UI** : icône ☁️ par espace dans le menu des espaces — `cloud-check`
+  (synchronisé) / `cloud-slash` (local), avec la mention `· local` sous le nom.
+- **Dupliquer** : la copie hérite du drapeau de la source (une copie d'un
+  espace local reste locale).
 
 ## Stockage de la configuration — note de sécurité
 

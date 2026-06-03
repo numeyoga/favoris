@@ -128,6 +128,17 @@
       transition: opacity .12s;
     }
     .space-menu .item:hover .row-actions { opacity: 1; }
+    /* La bascule de synchro est un indicateur de statut : toujours visible. */
+    .space-menu .item .row-status { display: inline-flex; }
+    .space-menu .item .row-status button {
+      width: 26px; height: 26px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 0; border-radius: 6px;
+      background: transparent; cursor: pointer;
+    }
+    .space-menu .item .row-status button:hover { background: var(--cv-surface-3); }
+    .space-menu .item .row-status .cloud-toggle:not(.local) { color: var(--cv-accent-500); }
+    .space-menu .item .row-status .cloud-toggle.local { color: var(--cv-fg-muted); }
     .space-menu .item .row-actions button {
       width: 26px; height: 26px;
       display: inline-flex; align-items: center; justify-content: center;
@@ -656,7 +667,8 @@
   }
   function createSpace(label) {
     const id = makeSpaceId(label);
-    spaces.push({ id, label: label.trim() || id, createdAt: Date.now() });
+    // Local par défaut : la synchronisation est un opt-in par espace.
+    spaces.push({ id, label: label.trim() || id, createdAt: Date.now(), synced: false });
     saveSpaces();
     // initialize empty data
     localStorage.setItem(DATA_KEY_PREFIX + id, JSON.stringify(emptyData()));
@@ -667,7 +679,8 @@
     const src = spaces.find(s => s.id === srcId); if (!src) return;
     const label = src.label + ' (copie)';
     const id = makeSpaceId(label);
-    spaces.push({ id, label, createdAt: Date.now() });
+    // On hérite du drapeau de la source : la copie d'un espace sensible reste locale.
+    spaces.push({ id, label, createdAt: Date.now(), synced: src.synced === true });
     saveSpaces();
     const data = localStorage.getItem(DATA_KEY_PREFIX + srcId) || JSON.stringify(emptyData());
     localStorage.setItem(DATA_KEY_PREFIX + id, data);
@@ -677,6 +690,24 @@
     const s = spaces.find(s => s.id === id); if (!s) return;
     s.label = label.trim() || s.label;
     saveSpaces();
+  }
+  // Un espace est synchronisé seulement si synced === true (local par défaut).
+  function spaceIsSynced(id) {
+    const s = spaces.find(s => s.id === id);
+    return !!(s && s.synced === true);
+  }
+  // Bascule la synchro d'un espace et réconcilie l'état distant via le moteur.
+  function setSpaceSynced(id, on) {
+    const s = spaces.find(s => s.id === id); if (!s) return;
+    s.synced = !!on;
+    saveSpaces();                              // réécrit l'index (push filtré)
+    const dataKey = DATA_KEY_PREFIX + id;
+    const sync = window.favorisSync;
+    if (on) {                                  // local -> synchronisé : pousser le contenu
+      if (sync && sync.requestPush) sync.requestPush(dataKey);
+    } else {                                   // synchronisé -> local : retirer du cloud
+      if (sync && sync.requestRemove) sync.requestRemove(dataKey);
+    }
   }
   function deleteSpace(id) {
     if (spaces.length <= 1) { toast('Impossible de supprimer le dernier espace'); return; }
@@ -817,9 +848,30 @@
 
         const meta = document.createElement('div');
         meta.className = 'meta';
-        meta.textContent = DATA_KEY_PREFIX + s.id + ' · ' + spaceLinkCount(s.id) + ' lien(s)';
+        meta.textContent = DATA_KEY_PREFIX + s.id + ' · ' + spaceLinkCount(s.id) + ' lien(s)'
+          + (s.synced === true ? '' : ' · local');
         nameWrap.appendChild(meta);
         item.appendChild(nameWrap);
+
+        // Bascule de synchro : indicateur de statut, dans son propre conteneur
+        // toujours visible (les autres actions n'apparaissent qu'au survol).
+        const synced = s.synced === true;
+        const status = document.createElement('span');
+        status.className = 'row-status';
+        const cloudBtn = iconButton(
+          synced ? 'cloud-check' : 'cloud-slash',
+          synced ? 'Synchronisé — cliquer pour garder local'
+                 : 'Local — cliquer pour synchroniser',
+          e => {
+            e.stopPropagation();
+            if (synced && !confirm('Rendre « ' + s.label + ' » local ? Ses données seront retirées du cloud.')) return;
+            setSpaceSynced(s.id, !synced);
+            renderList();
+          });
+        cloudBtn.classList.add('cloud-toggle');
+        if (!synced) cloudBtn.classList.add('local');
+        status.appendChild(cloudBtn);
+        item.appendChild(status);
 
         const actions = document.createElement('span');
         actions.className = 'row-actions';

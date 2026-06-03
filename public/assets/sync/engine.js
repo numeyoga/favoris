@@ -16,8 +16,23 @@ const META_KEY   = 'favoris.sync.meta';     // { [key]: { t, deleted, synced } }
 // les préférences propres à l'appareil : thème (favoris.theme) et espace
 // courant (favoris.currentSpace) restent locaux. La clé héritée
 // 'favoris.v1' (sans deux-points) est une sauvegarde et n'est pas suivie.
+//
+// La synchronisation est un opt-in PAR ESPACE : un espace n'est synchronisé
+// que si son drapeau synced === true (local par défaut). Le contenu d'un
+// espace local (clé favoris.v1:<id>) ne quitte jamais l'appareil, et son nom
+// n'apparaît pas dans l'index distant (voir _filterPushValue / _mergeSpacesIndex).
+function spaceSynced(id) {
+  try {
+    const arr = JSON.parse(localStorage.getItem('favoris.spaces') || '[]');
+    const s = Array.isArray(arr) ? arr.find(x => x && x.id === id) : null;
+    return !!(s && s.synced === true);
+  } catch (e) { return false; }
+}
 function isSyncedKey(k) {
-  return k === 'favoris.spaces' || (typeof k === 'string' && k.startsWith('favoris.v1:'));
+  if (k === 'favoris.spaces') return true; // index : toujours suivi, mais filtré au push
+  if (typeof k === 'string' && k.startsWith('favoris.v1:'))
+    return spaceSynced(k.slice('favoris.v1:'.length));
+  return false;
 }
 
 export const sync = {
@@ -137,6 +152,48 @@ export const sync = {
     this.schedulePush();
   },
 
+  // ---- API explicite app -> moteur (basculement synchro par espace) ----
+  // Tombstone ponctuel d'une clé (ex. contenu d'un espace passé en « local »).
+  // pushDirty itère sur meta sans re-tester isSyncedKey : la suppression part
+  // donc bien même si la clé est désormais considérée « non synchronisée ».
+  requestRemove(key) {
+    this.meta[key] = { t: Date.now(), deleted: true, synced: false };
+    this.saveMeta();
+    this.emit();
+    this.schedulePush();
+  },
+  // (Re)pousse une clé existante (ex. espace repassé en « synchronisé »).
+  requestPush(key) {
+    if (localStorage.getItem(key) != null) this._touch(key, false);
+  },
+
+  // Valeur effectivement poussée pour une clé. L'index favoris.spaces est
+  // filtré pour n'exposer QUE les espaces synchronisés : le nom des espaces
+  // locaux ne quitte jamais l'appareil.
+  _filterPushValue(key, value) {
+    if (key !== 'favoris.spaces' || value == null) return value;
+    try {
+      const arr = JSON.parse(value);
+      if (!Array.isArray(arr)) return value;
+      return JSON.stringify(arr.filter(s => s && s.synced === true));
+    } catch (e) { return value; }
+  },
+
+  // Fusion de l'index distant avec les espaces locaux. Le distant ne contient
+  // jamais que des espaces synchronisés ; on réinjecte les espaces locaux
+  // (synced !== true) qui n'existent que sur cet appareil, sinon ils
+  // disparaîtraient à l'application d'un index distant gagnant.
+  _mergeSpacesIndex(remoteValue) {
+    let remote = [], local = [];
+    try { remote = JSON.parse(remoteValue) || []; } catch (e) {}
+    try { local = JSON.parse(localStorage.getItem('favoris.spaces') || '[]') || []; } catch (e) {}
+    if (!Array.isArray(remote)) remote = [];
+    if (!Array.isArray(local)) local = [];
+    const remoteIds = new Set(remote.map(s => s && s.id));
+    const localOnly = local.filter(s => s && s.synced !== true && !remoteIds.has(s.id));
+    return JSON.stringify([...remote, ...localOnly]);
+  },
+
   schedulePush() {
     clearTimeout(this.pushTimer);
     this.pushTimer = setTimeout(() => this.pushDirty().catch(() => {}), 1500);
@@ -150,7 +207,7 @@ export const sync = {
       if (m.synced) continue;
       try {
         if (m.deleted) await this.adapter.remove(this.app, key, m.t);
-        else await this.adapter.push(this.app, key, localStorage.getItem(key), m.t);
+        else await this.adapter.push(this.app, key, this._filterPushValue(key, localStorage.getItem(key)), m.t);
         m.synced = true;
         this.saveMeta();
       } catch (e) { console.warn('[sync] push', key, e); }
@@ -190,7 +247,10 @@ export const sync = {
 
         if (r && remoteT > localT) {
           // Le distant gagne -> on applique sans re-marquer « sale ».
+          // Cas spécial de l'index : on fusionne pour préserver les espaces
+          // locaux, absents du distant par construction.
           if (r.deleted) this._origRemove(key);
+          else if (key === 'favoris.spaces') this._origSet(key, this._mergeSpacesIndex(r.value));
           else this._origSet(key, r.value);
           this.meta[key] = { t: remoteT, deleted: !!r.deleted, synced: true };
           changed = true;
