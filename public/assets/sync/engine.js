@@ -10,7 +10,7 @@
 // Aucune notion propre à Appwrite/Supabase ne remonte jusqu'à l'app.
 
 const CONFIG_KEY = 'favoris.remote.config'; // { provider, settings, app } — NON secret
-const META_KEY   = 'favoris.sync.meta';     // { [key]: { t, deleted, synced } }
+const META_KEY = 'favoris.sync.meta'; // { [key]: { t, deleted, synced } }
 
 // Quelles clés localStorage sont synchronisées ? On exclut volontairement
 // les préférences propres à l'appareil : thème (favoris.theme) et espace
@@ -24,9 +24,11 @@ const META_KEY   = 'favoris.sync.meta';     // { [key]: { t, deleted, synced } }
 function spaceSynced(id) {
   try {
     const arr = JSON.parse(localStorage.getItem('favoris.spaces') || '[]');
-    const s = Array.isArray(arr) ? arr.find(x => x && x.id === id) : null;
+    const s = Array.isArray(arr) ? arr.find((x) => x && x.id === id) : null;
     return !!(s && s.synced === true);
-  } catch (e) { return false; }
+  } catch (e) {
+    return false;
+  }
 }
 function isSyncedKey(k) {
   if (k === 'favoris.spaces') return true; // index : toujours suivi, mais filtré au push
@@ -36,44 +38,71 @@ function isSyncedKey(k) {
 }
 
 export const sync = {
-  app: 'favoris',          // namespace ; à changer pour réutiliser sur un autre site
-  adapters: {},            // registry : id -> adapter
+  app: 'favoris', // namespace ; à changer pour réutiliser sur un autre site
+  adapters: {}, // registry : id -> adapter
   adapter: null,
   config: null,
   meta: {},
   _user: null,
-  applying: false,         // garde anti-boucle pendant l'application du distant
+  applying: false, // garde anti-boucle pendant l'application du distant
   pushTimer: null,
   listeners: new Set(),
 
   // ---- Registry / events -------------------------------------
-  register(adapter) { this.adapters[adapter.id] = adapter; return this; },
-  on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
-  emit() { const s = this.status(); this.listeners.forEach(fn => { try { fn(s); } catch (e) {} }); },
+  register(adapter) {
+    this.adapters[adapter.id] = adapter;
+    return this;
+  },
+  on(fn) {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  },
+  emit() {
+    const s = this.status();
+    this.listeners.forEach((fn) => {
+      try {
+        fn(s);
+      } catch (e) {}
+    });
+  },
 
   status() {
     return {
       configured: !!this.config,
       provider: this.config ? this.config.provider : null,
-      adapters: Object.values(this.adapters).map(a => ({ id: a.id, label: a.label })),
+      adapters: Object.values(this.adapters).map((a) => ({ id: a.id, label: a.label })),
       user: this._user,
-      pending: Object.values(this.meta).some(m => !m.synced),
+      pending: Object.values(this.meta).some((m) => !m.synced),
     };
   },
 
   // ---- Persistance locale (non secrète) ----------------------
   loadConfig() {
-    try { this.config = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null'); }
-    catch (e) { this.config = null; }
+    try {
+      this.config = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
+    } catch (e) {
+      this.config = null;
+    }
     return this.config;
   },
-  saveConfig(cfg) { this.config = cfg; localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); },
-  clearConfig() { this.config = null; localStorage.removeItem(CONFIG_KEY); },
-  loadMeta() {
-    try { this.meta = JSON.parse(localStorage.getItem(META_KEY) || '{}'); }
-    catch (e) { this.meta = {}; }
+  saveConfig(cfg) {
+    this.config = cfg;
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
   },
-  saveMeta() { this._origSet(META_KEY, JSON.stringify(this.meta)); },
+  clearConfig() {
+    this.config = null;
+    localStorage.removeItem(CONFIG_KEY);
+  },
+  loadMeta() {
+    try {
+      this.meta = JSON.parse(localStorage.getItem(META_KEY) || '{}');
+    } catch (e) {
+      this.meta = {};
+    }
+  },
+  saveMeta() {
+    this._origSet(META_KEY, JSON.stringify(this.meta));
+  },
 
   // ---- Initialisation ----------------------------------------
   async init() {
@@ -84,7 +113,11 @@ export const sync = {
       if (!document.hidden && this._user) this.pullAndApply().catch(() => {});
     });
     if (this.config) {
-      try { await this._activate(); } catch (e) { console.warn('[sync] init', e); }
+      try {
+        await this._activate();
+      } catch (e) {
+        console.warn('[sync] init', e);
+      }
     }
     this.emit();
     return this;
@@ -107,7 +140,9 @@ export const sync = {
   },
 
   async forget() {
-    try { await this.signOut(); } catch (e) {}
+    try {
+      await this.signOut();
+    } catch (e) {}
     this.clearConfig();
     this.adapter = null;
     this._user = null;
@@ -117,7 +152,7 @@ export const sync = {
   // ---- Auth (déléguée à l'adapter) ---------------------------
   async connect(email) {
     if (!this.adapter) throw new Error('Aucun backend configuré');
-    await this.adapter.signIn(email);   // envoie le magic-link ; retour géré au reload
+    await this.adapter.signIn(email); // envoie le magic-link ; retour géré au reload
   },
   async signOut() {
     if (this.adapter) await this.adapter.signOut();
@@ -175,8 +210,10 @@ export const sync = {
     try {
       const arr = JSON.parse(value);
       if (!Array.isArray(arr)) return value;
-      return JSON.stringify(arr.filter(s => s && s.synced === true));
-    } catch (e) { return value; }
+      return JSON.stringify(arr.filter((s) => s && s.synced === true));
+    } catch (e) {
+      return value;
+    }
   },
 
   // Fusion de l'index distant avec les espaces locaux. Le distant ne contient
@@ -184,13 +221,18 @@ export const sync = {
   // (synced !== true) qui n'existent que sur cet appareil, sinon ils
   // disparaîtraient à l'application d'un index distant gagnant.
   _mergeSpacesIndex(remoteValue) {
-    let remote = [], local = [];
-    try { remote = JSON.parse(remoteValue) || []; } catch (e) {}
-    try { local = JSON.parse(localStorage.getItem('favoris.spaces') || '[]') || []; } catch (e) {}
+    let remote = [],
+      local = [];
+    try {
+      remote = JSON.parse(remoteValue) || [];
+    } catch (e) {}
+    try {
+      local = JSON.parse(localStorage.getItem('favoris.spaces') || '[]') || [];
+    } catch (e) {}
     if (!Array.isArray(remote)) remote = [];
     if (!Array.isArray(local)) local = [];
-    const remoteIds = new Set(remote.map(s => s && s.id));
-    const localOnly = local.filter(s => s && s.synced !== true && !remoteIds.has(s.id));
+    const remoteIds = new Set(remote.map((s) => s && s.id));
+    const localOnly = local.filter((s) => s && s.synced !== true && !remoteIds.has(s.id));
     return JSON.stringify([...remote, ...localOnly]);
   },
 
@@ -207,10 +249,18 @@ export const sync = {
       if (m.synced) continue;
       try {
         if (m.deleted) await this.adapter.remove(this.app, key, m.t);
-        else await this.adapter.push(this.app, key, this._filterPushValue(key, localStorage.getItem(key)), m.t);
+        else
+          await this.adapter.push(
+            this.app,
+            key,
+            this._filterPushValue(key, localStorage.getItem(key)),
+            m.t
+          );
         m.synced = true;
         this.saveMeta();
-      } catch (e) { console.warn('[sync] push', key, e); }
+      } catch (e) {
+        console.warn('[sync] push', key, e);
+      }
     }
     this.emit();
   },
@@ -242,7 +292,7 @@ export const sync = {
         const r = remote[key];
         const localExists = localStorage.getItem(key) != null;
         const lm = this.meta[key];
-        const localT = lm ? lm.t : (localExists ? 0 : -1);
+        const localT = lm ? lm.t : localExists ? 0 : -1;
         const remoteT = r ? r.updatedAt : -1;
 
         if (r && remoteT > localT) {
@@ -260,7 +310,9 @@ export const sync = {
           else lm.synced = false;
         }
       }
-    } finally { this.applying = false; }
+    } finally {
+      this.applying = false;
+    }
 
     this.saveMeta();
     if (changed && typeof window.favorisApplyExternalChange === 'function') {
@@ -269,7 +321,9 @@ export const sync = {
     await this.pushDirty();
   },
 
-  async syncNow() { if (this._user) await this.pullAndApply(); },
+  async syncNow() {
+    if (this._user) await this.pullAndApply();
+  },
 
   _localSyncedKeys() {
     const out = [];
