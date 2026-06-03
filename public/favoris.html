@@ -1,0 +1,1584 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Favoris</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon-favoris.svg">
+  <link rel="stylesheet" href="assets/covenant.css">
+  <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { background: var(--cv-bg); color: var(--cv-fg); font: 400 14px/1.4 var(--cv-font-sans); }
+    button, select, input, textarea { font-family: inherit; }
+
+    *::-webkit-scrollbar { width: 10px; height: 10px; }
+    *::-webkit-scrollbar-thumb { background: var(--cv-neutral-300); border-radius: 9999px; border: 2px solid var(--cv-bg); }
+    *::-webkit-scrollbar-thumb:hover { background: var(--cv-neutral-400); }
+    *::-webkit-scrollbar-track { background: transparent; }
+
+    .page { width: 100%; margin: 0; padding: 28px 32px 64px; box-sizing: border-box; }
+    @media (max-width: 720px) { .page { padding: 20px 16px 48px; } }
+
+    /* --- Topbar -------------------------------------------------------- */
+    .topbar {
+      display: flex; align-items: center; gap: 16px;
+      margin-bottom: 28px;
+    }
+    .topbar h1 {
+      margin: 0; font: 600 22px/1.2 var(--cv-font-sans);
+      letter-spacing: -0.01em;
+      display: flex; align-items: center; gap: 10px;
+      flex-shrink: 0;
+    }
+    .topbar h1 .dot {
+      width: 10px; height: 10px; border-radius: 3px;
+      background: var(--cv-accent-500);
+    }
+
+    /* Space switcher chip */
+    .space-chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      height: 32px; padding: 0 6px 0 12px;
+      border: 1px solid var(--cv-border);
+      border-radius: 8px;
+      background: var(--cv-surface);
+      color: var(--cv-fg);
+      font: 500 13px/1 var(--cv-font-sans);
+      cursor: pointer;
+      transition: background .12s, border-color .12s;
+    }
+    .space-chip:hover { background: var(--cv-surface-2); border-color: var(--cv-border-strong); }
+    .space-chip .lbl-wrap {
+      display: inline-flex; align-items: center; gap: 6px;
+      max-width: 220px;
+    }
+    .space-chip .lbl {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .space-chip .pfx {
+      font: 500 11px/1 var(--cv-font-mono);
+      color: var(--cv-fg-subtle);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .space-chip .caret {
+      width: 22px; height: 22px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--cv-fg-muted);
+      border-radius: 4px;
+    }
+
+    /* Space menu popover */
+    .space-menu {
+      width: 100%; max-width: 360px;
+      background: var(--cv-surface-raised);
+      border: 1px solid var(--cv-border);
+      border-radius: 12px;
+      box-shadow: var(--cv-shadow-lg);
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      max-height: min(560px, 80vh);
+    }
+    .space-menu header {
+      padding: 10px 14px; border-bottom: 1px solid var(--cv-border);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--cv-surface-2);
+    }
+    .space-menu header h3 {
+      margin: 0; font: 600 12px/1 var(--cv-font-sans);
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--cv-fg-muted);
+    }
+    .space-menu .list { padding: 6px; overflow: auto; flex: 1; }
+    .space-menu .item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .space-menu .item:hover { background: var(--cv-surface-2); }
+    .space-menu .item.active {
+      background: color-mix(in srgb, var(--cv-accent-500) 12%, transparent);
+    }
+    .space-menu .item .check {
+      width: 18px; flex-shrink: 0; color: var(--cv-accent-500);
+      display: inline-flex; justify-content: center;
+    }
+    .space-menu .item .name-wrap {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .space-menu .item .name {
+      font: 500 13px/1.2 var(--cv-font-sans);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .space-menu .item .name input {
+      width: 100%; border: 1px solid var(--cv-border); border-radius: 6px;
+      padding: 4px 6px; font: inherit; background: var(--cv-surface);
+      color: var(--cv-fg); outline: none;
+    }
+    .space-menu .item .name input:focus { border-color: var(--cv-accent-500); box-shadow: var(--cv-shadow-focus); }
+    .space-menu .item .meta {
+      font: 400 11px/1 var(--cv-font-mono);
+      color: var(--cv-fg-subtle);
+    }
+    .space-menu .item .row-actions {
+      display: inline-flex; gap: 2px; opacity: 0;
+      transition: opacity .12s;
+    }
+    .space-menu .item:hover .row-actions { opacity: 1; }
+    .space-menu .item .row-actions button {
+      width: 26px; height: 26px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 0; border-radius: 6px;
+      background: transparent; color: var(--cv-fg-muted);
+      cursor: pointer;
+    }
+    .space-menu .item .row-actions button:hover {
+      background: var(--cv-surface-3); color: var(--cv-fg);
+    }
+    .space-menu footer {
+      padding: 8px; border-top: 1px solid var(--cv-border);
+      display: flex; gap: 6px;
+    }
+    .space-menu footer .btn { flex: 1; height: 32px; justify-content: center; }
+    .topbar .count {
+      font: 400 12px/1 var(--cv-font-mono);
+      color: var(--cv-fg-subtle);
+      padding: 4px 8px;
+      border: 1px solid var(--cv-border);
+      border-radius: 9999px;
+    }
+    .topbar .spacer { flex: 1; }
+
+    .search {
+      position: relative;
+      width: 320px; max-width: 100%;
+    }
+    .search input {
+      width: 100%; height: 36px;
+      padding: 0 12px 0 34px;
+      border: 1px solid var(--cv-border);
+      border-radius: 8px;
+      background: var(--cv-surface);
+      color: var(--cv-fg);
+      font: 400 13px/1 var(--cv-font-sans);
+      outline: none;
+      transition: border-color .12s, box-shadow .12s;
+    }
+    .search input:focus { border-color: var(--cv-accent-500); box-shadow: var(--cv-shadow-focus); }
+    .search i {
+      position: absolute; left: 10px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--cv-fg-subtle);
+      pointer-events: none;
+    }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      height: 36px; padding: 0 14px;
+      border-radius: 8px;
+      border: 1px solid var(--cv-border);
+      background: var(--cv-surface);
+      color: var(--cv-fg);
+      font: 500 13px/1 var(--cv-font-sans);
+      cursor: pointer;
+      transition: background .12s, border-color .12s;
+    }
+    .btn:hover { background: var(--cv-surface-2); }
+    .btn.primary {
+      background: var(--cv-accent-500); color: white;
+      border-color: var(--cv-accent-500);
+    }
+    .btn.primary:hover { background: var(--cv-accent-600); border-color: var(--cv-accent-600); }
+    .btn.ghost { background: transparent; border-color: transparent; }
+    .btn.ghost:hover { background: var(--cv-surface-2); }
+    .btn.sm { height: 28px; padding: 0 10px; font-size: 12px; }
+    .btn.icon-only { width: 32px; padding: 0; justify-content: center; }
+
+    /* --- Tag grid ------------------------------------------------------ */
+    .grid {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      grid-auto-flow: dense;
+      align-items: start;
+    }
+    .tag-card {
+      --tag-color: var(--cv-accent-500);
+      border: 1px solid var(--cv-border);
+      border-radius: 12px;
+      background: var(--cv-surface);
+      box-shadow: var(--cv-shadow-sm);
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      position: relative;
+    }
+
+    /* Featured tag — takes 2 columns × 2 rows, tinted, 2-column inner list */
+    .tag-card.featured {
+      grid-column: span 2;
+      grid-row: span 2;
+      border-color: color-mix(in srgb, var(--tag-color) 35%, var(--cv-border));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--tag-color) 18%, transparent),
+        var(--cv-shadow-md);
+      background:
+        linear-gradient(180deg,
+          color-mix(in srgb, var(--tag-color) 8%, var(--cv-surface)),
+          var(--cv-surface) 220px);
+    }
+    .tag-card.featured > header {
+      padding: 18px 18px 16px;
+      gap: 12px;
+      border-bottom-color: color-mix(in srgb, var(--tag-color) 25%, var(--cv-border));
+      background: linear-gradient(180deg,
+        color-mix(in srgb, var(--tag-color) 14%, transparent),
+        transparent);
+    }
+    .tag-card.featured > header .bar { width: 4px; }
+    .tag-card.featured > header .label {
+      font: 700 14px/1 var(--cv-font-sans);
+      letter-spacing: 0.05em;
+    }
+    .tag-card.featured > header .star {
+      display: inline-flex; color: var(--tag-color);
+      font-size: 14px;
+    }
+    .tag-card.featured > header .num {
+      font-size: 12px;
+      color: color-mix(in srgb, var(--tag-color) 80%, var(--cv-fg));
+      background: color-mix(in srgb, var(--tag-color) 14%, transparent);
+      padding: 3px 8px; border-radius: 9999px;
+    }
+    .tag-card.featured > ul {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 4px;
+      padding: 10px;
+    }
+    .tag-card.featured > ul > li:not(.empty) a.name { font-size: 13.5px; }
+    @media (max-width: 720px) {
+      .tag-card.featured { grid-column: span 1; grid-row: auto; }
+      .tag-card.featured > ul { grid-template-columns: 1fr; }
+    }
+
+    .tag-card header .actions button {
+      width: 26px; height: 26px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 0; border-radius: 6px;
+      background: transparent; color: var(--cv-fg-muted);
+      cursor: pointer;
+      transition: background .1s, color .1s;
+    }
+    .tag-card header .actions button:hover { background: var(--cv-surface-3); color: var(--cv-fg); }
+    .star-toggle.on { color: var(--tag-color, var(--cv-accent-500)) !important; }
+    .star-toggle.on:hover { background: color-mix(in srgb, var(--tag-color) 12%, transparent) !important; }
+    /* Featured cards keep their actions visible to expose the "unstar" affordance */
+    .tag-card.featured header .actions { opacity: 1; }
+
+    /* Collapse / fold */
+    .tag-card header .fold {
+      width: 26px; height: 26px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 0; border-radius: 6px;
+      background: transparent; color: var(--cv-fg-muted);
+      cursor: pointer; flex-shrink: 0;
+      transition: background .1s, color .1s, transform .15s;
+    }
+    .tag-card header .fold:hover { background: var(--cv-surface-3); color: var(--cv-fg); }
+    .tag-card.collapsed header .fold i { transform: rotate(-90deg); display: inline-block; }
+    .tag-card.collapsed > ul,
+    .tag-card.collapsed > .add-row { display: none; }
+    .tag-card.collapsed { grid-row: auto !important; }
+    .tag-card.collapsed > header { border-bottom: 0; }
+    .tag-card header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--cv-border);
+    }
+    .tag-card header .bar {
+      width: 3px; align-self: stretch; border-radius: 2px;
+      margin: 2px 0;
+    }
+    .tag-card header .label {
+      font: 600 11px/1 var(--cv-font-sans);
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--cv-fg);
+      display: flex; align-items: center; gap: 8px;
+      min-width: 0;
+      flex: 0 1 auto;
+      overflow: hidden;
+    }
+    .tag-card header .label > span,
+    .tag-card header .label > input { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tag-card header .label input {
+      border: 0; background: transparent; padding: 0;
+      font: inherit; color: inherit; width: 100%;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      outline: none;
+    }
+    .tag-card header .label input:focus { border-bottom: 1px dashed var(--cv-border-strong); }
+    .tag-card header .num {
+      font: 400 11px/1 var(--cv-font-mono);
+      color: var(--cv-fg-subtle);
+    }
+    .tag-card header .actions {
+      margin-left: auto; display: flex; gap: 2px; opacity: 0;
+      transition: opacity .12s;
+    }
+    .tag-card:hover header .actions { opacity: 1; }
+    body.edit .tag-card header .actions { opacity: 1; }
+
+    .tag-card ul {
+      list-style: none; margin: 0; padding: 6px;
+      flex: 1;
+    }
+    .tag-card li {
+      position: relative;
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      transition: background .08s;
+    }
+    .tag-card li:hover { background: var(--cv-surface-2); }
+    .tag-card li i.link-icon {
+      color: var(--cv-fg-subtle); flex-shrink: 0;
+    }
+    /* Title takes the full available row width and falls back to ellipsis
+       only when it truly overflows. The row actions overlay the right edge
+       on hover (absolute-positioned with a fade gradient) so they no longer
+       reserve inline space that would prematurely truncate the title. */
+    .tag-card li a.name {
+      flex: 1 1 auto; min-width: 0;
+      font: 500 13px/1.3 var(--cv-font-sans);
+      color: var(--cv-fg);
+      text-decoration: none;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .tag-card li a.name:hover { color: var(--cv-fg-accent); }
+    .tag-card li .row-actions {
+      position: absolute;
+      top: 50%; right: 4px;
+      transform: translateY(-50%);
+      display: inline-flex; gap: 2px;
+      padding-left: 28px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .12s;
+      /* Fade behind the action buttons so the truncated end of a long
+         title stays legible. Resolves to the row's hover background. */
+      background: linear-gradient(90deg, transparent 0, var(--cv-surface-2) 24px);
+      border-radius: 6px;
+    }
+    .tag-card li:hover .row-actions,
+    body.edit .tag-card li .row-actions { opacity: 1; pointer-events: auto; }
+
+    .row-actions button {
+      width: 26px; height: 26px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 0; border-radius: 6px;
+      background: transparent; color: var(--cv-fg-muted);
+      cursor: pointer;
+    }
+    .row-actions button:hover { background: var(--cv-surface-3); color: var(--cv-fg); }
+
+    .tag-card .add-row {
+      border-top: 1px dashed var(--cv-border);
+      padding: 8px;
+      display: none;
+    }
+    body.edit .tag-card .add-row { display: block; }
+    .tag-card .add-row button {
+      width: 100%; height: 28px;
+      background: transparent; border: 0;
+      color: var(--cv-fg-muted);
+      font: 500 12px/1 var(--cv-font-sans);
+      cursor: pointer;
+      border-radius: 6px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .tag-card .add-row button:hover { background: var(--cv-surface-2); color: var(--cv-fg); }
+
+    .tag-card .empty {
+      padding: 16px 12px;
+      color: var(--cv-fg-subtle);
+      font: 400 12px/1.4 var(--cv-font-sans);
+      text-align: center;
+    }
+
+    /* --- Drag & drop --------------------------------------------------- */
+    .drag-handle {
+      display: none;
+      width: 22px; height: 22px;
+      align-items: center; justify-content: center;
+      color: var(--cv-fg-subtle);
+      cursor: grab;
+      flex-shrink: 0;
+      border-radius: 5px;
+      touch-action: none;
+    }
+    .drag-handle:hover { background: var(--cv-surface-3); color: var(--cv-fg-muted); }
+    .drag-handle:active { cursor: grabbing; }
+    body.edit .tag-card li:not(.empty) .drag-handle,
+    body.edit .tag-card > header .drag-handle { display: inline-flex; }
+
+    /* The element being dragged fades out */
+    .tag-card.dragging { opacity: .45; }
+    .tag-card li.dragging { opacity: .4; }
+
+    /* Insertion line for link rows */
+    .tag-card li.drop-before::before,
+    .tag-card li.drop-after::after {
+      content: ''; position: absolute; left: 6px; right: 6px; height: 2px;
+      background: var(--cv-accent-500); border-radius: 2px;
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--cv-accent-500) 28%, transparent);
+      z-index: 2; pointer-events: none;
+    }
+    .tag-card li.drop-before::before { top: -1px; }
+    .tag-card li.drop-after::after  { bottom: -1px; }
+
+    /* Card highlighted as a reorder target / link drop zone */
+    .tag-card.drop-target {
+      outline: 2px dashed var(--cv-accent-500);
+      outline-offset: -1px;
+    }
+    .tag-card > ul.drop-into {
+      background: color-mix(in srgb, var(--cv-accent-500) 8%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cv-accent-500) 24%, transparent);
+      border-radius: 8px;
+    }
+    body.edit .tag-card > header { cursor: default; }
+
+    /* --- Empty state --------------------------------------------------- */
+    .empty-state {
+      border: 1px dashed var(--cv-border-strong);
+      border-radius: 12px;
+      padding: 48px 24px; text-align: center;
+      color: var(--cv-fg-muted);
+    }
+    .empty-state h2 {
+      margin: 0 0 6px; font: 600 16px/1.2 var(--cv-font-sans);
+      color: var(--cv-fg);
+    }
+    .empty-state p { margin: 0 0 16px; font-size: 13px; }
+
+    /* --- Modal --------------------------------------------------------- */
+    .scrim {
+      position: fixed; inset: 0; background: var(--cv-overlay);
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px; z-index: 100;
+      animation: fade .12s ease-out;
+    }
+    @keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+    .modal {
+      width: 100%; max-width: 460px;
+      background: var(--cv-surface-raised);
+      border: 1px solid var(--cv-border);
+      border-radius: 12px;
+      box-shadow: var(--cv-shadow-lg);
+      overflow: hidden;
+    }
+    .modal header {
+      padding: 14px 18px; border-bottom: 1px solid var(--cv-border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal header h3 { margin: 0; font: 600 15px/1 var(--cv-font-sans); }
+    .modal .body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+    .modal footer {
+      padding: 12px 18px; border-top: 1px solid var(--cv-border);
+      display: flex; gap: 8px; justify-content: flex-end;
+      background: var(--cv-surface-2);
+    }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label {
+      font: 500 12px/1 var(--cv-font-sans); color: var(--cv-fg-muted);
+    }
+    .field input, .field select {
+      height: 36px; padding: 0 10px;
+      border: 1px solid var(--cv-border);
+      border-radius: 8px;
+      background: var(--cv-surface);
+      color: var(--cv-fg);
+      font: 400 13px/1 var(--cv-font-sans);
+      outline: none;
+    }
+    .field input:focus, .field select:focus {
+      border-color: var(--cv-accent-500);
+      box-shadow: var(--cv-shadow-focus);
+    }
+
+    .color-swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+    .color-swatches button {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+    }
+    .color-swatches button.sel { border-color: var(--cv-fg); }
+
+    /* --- Toast --------------------------------------------------------- */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%);
+      background: var(--cv-fg);
+      color: var(--cv-fg-inverse);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font: 500 13px/1 var(--cv-font-sans);
+      box-shadow: var(--cv-shadow-md);
+      z-index: 200;
+      animation: toastin .2s ease-out;
+    }
+    @keyframes toastin { from { opacity: 0; transform: translate(-50%, 8px) } to { opacity: 1; transform: translate(-50%, 0) } }
+  </style>
+</head>
+<body data-screen-label="Favoris">
+  <div class="page">
+    <div class="topbar">
+      <h1><span class="dot"></span> Favoris <span class="count" id="count">0</span></h1>
+      <button class="space-chip" id="space-btn" title="Changer d'espace">
+        <span class="lbl-wrap">
+          <span class="pfx">Espace</span>
+          <span class="lbl" id="space-label">—</span>
+        </span>
+        <span class="caret"><i class="ph ph-caret-down"></i></span>
+      </button>
+      <div class="spacer"></div>
+      <div class="search">
+        <i class="ph ph-magnifying-glass"></i>
+        <input id="search" type="search" placeholder="Rechercher (nom, url, tag)…" autocomplete="off">
+      </div>
+      <button class="btn ghost" id="toggle-edit" title="Mode édition">
+        <i class="ph ph-pencil-simple"></i>
+        <span id="edit-label">Éditer</span>
+      </button>
+      <button class="btn ghost icon-only" id="menu-btn" title="Plus">
+        <i class="ph ph-dots-three-vertical"></i>
+      </button>
+      <button class="btn primary" id="add-link">
+        <i class="ph ph-plus"></i> Lien
+      </button>
+    </div>
+
+    <div id="grid"></div>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <script>
+  // ============================================================
+  // State + persistence (multi-espaces)
+  // ============================================================
+  // Storage keys:
+  //   favoris.spaces        → [{ id, label, createdAt }]
+  //   favoris.currentSpace  → id of the active space
+  //   favoris.v1:<id>       → the data for that space
+  const SPACES_KEY = 'favoris.spaces';
+  const CURRENT_SPACE_KEY = 'favoris.currentSpace';
+  const DATA_KEY_PREFIX = 'favoris.v1:';
+  // Backwards-compat: previous versions stored everything under a single key.
+  const LEGACY_KEY = 'favoris.v1';
+
+  const DEFAULT_TAGS = [
+    { id: 'docs',     label: 'Documentation', color: '#6366f1', featured: true },
+    { id: 'tools',    label: 'Outils',        color: '#0d9488' },
+    { id: 'reading',  label: 'Lecture',       color: '#d97706' },
+    { id: 'inspire',  label: 'Inspiration',   color: '#db2777' },
+  ];
+  const PALETTE = [
+    '#2563eb', '#0d9488', '#8b5cf6', '#d97706',
+    '#16a34a', '#db2777', '#6366f1', '#64748b',
+    '#f43f5e', '#0891b2', '#84cc16', '#a855f7',
+  ];
+
+  function uid() { return Math.random().toString(36).slice(2, 10); }
+  function slugify(s) {
+    return String(s || '').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+  }
+
+  // ---- Spaces ------------------------------------------------
+  function loadSpaces() {
+    try {
+      const raw = localStorage.getItem(SPACES_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr) && arr.length) return arr;
+      }
+    } catch (e) {}
+    return null;
+  }
+  function saveSpaces() {
+    localStorage.setItem(SPACES_KEY, JSON.stringify(spaces));
+  }
+  function ensureSpaces() {
+    let list = loadSpaces();
+    if (list) return list;
+    // Migration from legacy single-key storage → "default" space
+    list = [{ id: 'default', label: 'Mon espace', createdAt: Date.now() }];
+    localStorage.setItem(SPACES_KEY, JSON.stringify(list));
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (legacy && !localStorage.getItem(DATA_KEY_PREFIX + 'default')) {
+      localStorage.setItem(DATA_KEY_PREFIX + 'default', legacy);
+      // keep legacy as a backup; don't delete
+    }
+    localStorage.setItem(CURRENT_SPACE_KEY, 'default');
+    return list;
+  }
+  function loadCurrentSpaceId() {
+    const id = localStorage.getItem(CURRENT_SPACE_KEY);
+    if (id && spaces.find(s => s.id === id)) return id;
+    return spaces[0].id;
+  }
+  function setCurrentSpace(id) {
+    if (!spaces.find(s => s.id === id)) return;
+    localStorage.setItem(CURRENT_SPACE_KEY, id);
+    currentSpaceId = id;
+    state = loadData();
+    render();
+    renderSpaceChip();
+  }
+  function currentSpace() {
+    return spaces.find(s => s.id === currentSpaceId) || spaces[0];
+  }
+  function makeSpaceId(label) {
+    let base = slugify(label) || uid();
+    let id = base, i = 1;
+    while (spaces.find(s => s.id === id)) id = base + '-' + (++i);
+    return id;
+  }
+  function createSpace(label) {
+    const id = makeSpaceId(label);
+    spaces.push({ id, label: label.trim() || id, createdAt: Date.now() });
+    saveSpaces();
+    // initialize empty data
+    localStorage.setItem(DATA_KEY_PREFIX + id, JSON.stringify(emptyData()));
+    setCurrentSpace(id);
+    return id;
+  }
+  function duplicateSpace(srcId) {
+    const src = spaces.find(s => s.id === srcId); if (!src) return;
+    const label = src.label + ' (copie)';
+    const id = makeSpaceId(label);
+    spaces.push({ id, label, createdAt: Date.now() });
+    saveSpaces();
+    const data = localStorage.getItem(DATA_KEY_PREFIX + srcId) || JSON.stringify(emptyData());
+    localStorage.setItem(DATA_KEY_PREFIX + id, data);
+    return id;
+  }
+  function renameSpace(id, label) {
+    const s = spaces.find(s => s.id === id); if (!s) return;
+    s.label = label.trim() || s.label;
+    saveSpaces();
+  }
+  function deleteSpace(id) {
+    if (spaces.length <= 1) { toast('Impossible de supprimer le dernier espace'); return; }
+    const idx = spaces.findIndex(s => s.id === id); if (idx < 0) return;
+    spaces.splice(idx, 1);
+    saveSpaces();
+    localStorage.removeItem(DATA_KEY_PREFIX + id);
+    if (id === currentSpaceId) setCurrentSpace(spaces[0].id);
+  }
+  function spaceLinkCount(id) {
+    try {
+      const raw = localStorage.getItem(DATA_KEY_PREFIX + id);
+      if (!raw) return 0;
+      const d = JSON.parse(raw);
+      return Array.isArray(d.links) ? d.links.length : 0;
+    } catch (e) { return 0; }
+  }
+
+  // ---- Per-space data ----------------------------------------
+  function emptyData() {
+    return {
+      tags: DEFAULT_TAGS.slice(),
+      links: [],
+      editMode: false,
+    };
+  }
+  function seededData() {
+    return {
+      tags: DEFAULT_TAGS.slice(),
+      links: [
+        { id: uid(), name: 'MDN Web Docs',    url: 'https://developer.mozilla.org', tag: 'docs' },
+        { id: uid(), name: 'Can I Use',       url: 'https://caniuse.com',           tag: 'docs' },
+        { id: uid(), name: 'GitHub',          url: 'https://github.com',            tag: 'tools' },
+        { id: uid(), name: 'Hacker News',     url: 'https://news.ycombinator.com',  tag: 'reading' },
+        { id: uid(), name: 'Are.na',          url: 'https://are.na',                tag: 'inspire' },
+      ],
+      editMode: false,
+    };
+  }
+  function loadData() {
+    const key = DATA_KEY_PREFIX + currentSpaceId;
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    // first run for this space → seed the default space, empty otherwise
+    const data = currentSpaceId === 'default' && !localStorage.getItem(LEGACY_KEY)
+      ? seededData()
+      : emptyData();
+    localStorage.setItem(key, JSON.stringify(data));
+    return data;
+  }
+  function save() {
+    localStorage.setItem(DATA_KEY_PREFIX + currentSpaceId, JSON.stringify(state));
+  }
+
+  let spaces = ensureSpaces();
+  let currentSpaceId = loadCurrentSpaceId();
+  let state = loadData();
+  let search = '';
+  let modal = null;
+
+  // ============================================================
+  // Space chip + menu
+  // ============================================================
+  function renderSpaceChip() {
+    const s = currentSpace();
+    $('#space-label').textContent = s.label;
+  }
+
+  function openSpaceMenu() {
+    const root = $('#modal-root');
+    root.innerHTML = '';
+    const scrim = document.createElement('div');
+    scrim.className = 'scrim';
+    scrim.style.background = 'transparent';
+    scrim.style.alignItems = 'flex-start';
+    scrim.style.justifyContent = 'flex-start';
+    scrim.style.padding = '0';
+    scrim.onclick = e => { if (e.target === scrim) closeModal(); };
+
+    const r = $('#space-btn').getBoundingClientRect();
+    const m = document.createElement('div');
+    m.className = 'space-menu';
+    m.style.position = 'absolute';
+    m.style.top = (r.bottom + 6) + 'px';
+    m.style.left = r.left + 'px';
+
+    let renamingId = null;
+
+    function renderList() {
+      m.innerHTML = '';
+      const head = document.createElement('header');
+      const h3 = document.createElement('h3'); h3.textContent = 'Espaces';
+      head.appendChild(h3);
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'btn ghost icon-only';
+      closeBtn.style.height = '24px'; closeBtn.style.width = '24px';
+      closeBtn.innerHTML = '<i class="ph ph-x"></i>';
+      closeBtn.onclick = closeModal;
+      head.appendChild(closeBtn);
+      m.appendChild(head);
+
+      const list = document.createElement('div');
+      list.className = 'list';
+      spaces.forEach(s => {
+        const item = document.createElement('div');
+        item.className = 'item' + (s.id === currentSpaceId ? ' active' : '');
+        item.onclick = e => {
+          if (e.target.closest('button') || e.target.closest('input')) return;
+          if (s.id !== currentSpaceId) { setCurrentSpace(s.id); closeModal(); }
+        };
+
+        const check = document.createElement('span');
+        check.className = 'check';
+        if (s.id === currentSpaceId) check.innerHTML = '<i class="ph-fill ph-check-circle"></i>';
+        item.appendChild(check);
+
+        const nameWrap = document.createElement('div');
+        nameWrap.className = 'name-wrap';
+
+        const name = document.createElement('div');
+        name.className = 'name';
+        if (renamingId === s.id) {
+          const ip = document.createElement('input');
+          ip.value = s.label;
+          ip.onkeydown = e => {
+            if (e.key === 'Enter') { renameSpace(s.id, ip.value); renamingId = null; renderSpaceChip(); renderList(); }
+            if (e.key === 'Escape') { renamingId = null; renderList(); }
+          };
+          ip.onblur = () => { if (renamingId === s.id) { renameSpace(s.id, ip.value); renamingId = null; renderSpaceChip(); renderList(); } };
+          name.appendChild(ip);
+          setTimeout(() => { ip.focus(); ip.select(); }, 30);
+        } else {
+          name.textContent = s.label;
+        }
+        nameWrap.appendChild(name);
+
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.textContent = DATA_KEY_PREFIX + s.id + ' · ' + spaceLinkCount(s.id) + ' lien(s)';
+        nameWrap.appendChild(meta);
+        item.appendChild(nameWrap);
+
+        const actions = document.createElement('span');
+        actions.className = 'row-actions';
+        actions.appendChild(iconButton('pencil-simple', 'Renommer', e => { e.stopPropagation(); renamingId = s.id; renderList(); }));
+        actions.appendChild(iconButton('copy', 'Dupliquer', e => { e.stopPropagation(); duplicateSpace(s.id); renderList(); }));
+        if (spaces.length > 1) {
+          actions.appendChild(iconButton('trash', 'Supprimer', e => {
+            e.stopPropagation();
+            if (confirm('Supprimer l’espace « ' + s.label + ' » et tous ses favoris ?')) {
+              deleteSpace(s.id); renderList(); renderSpaceChip();
+            }
+          }));
+        }
+        item.appendChild(actions);
+
+        list.appendChild(item);
+      });
+      m.appendChild(list);
+
+      const foot = document.createElement('footer');
+      const addBtn = document.createElement('button');
+      addBtn.className = 'btn';
+      addBtn.innerHTML = '<i class="ph ph-plus"></i> Nouvel espace';
+      addBtn.onclick = () => {
+        const label = prompt('Nom du nouvel espace ?', 'Nouvel espace');
+        if (!label) return;
+        createSpace(label);
+        closeModal();
+      };
+      foot.appendChild(addBtn);
+      m.appendChild(foot);
+    }
+    renderList();
+
+    scrim.appendChild(m);
+    root.appendChild(scrim);
+  }
+
+  // ============================================================
+  // Render
+  // ============================================================
+  const $ = sel => document.querySelector(sel);
+
+  function favicon(url) {
+    try {
+      const host = new URL(url).hostname;
+      return 'https://www.google.com/s2/favicons?sz=32&domain=' + host;
+    } catch (e) { return ''; }
+  }
+
+  function render() {
+    document.body.classList.toggle('edit', !!state.editMode);
+    $('#edit-label').textContent = state.editMode ? 'Terminer' : 'Éditer';
+
+    const q = search.trim().toLowerCase();
+    const filteredLinks = q
+      ? state.links.filter(l => {
+          const tag = state.tags.find(t => t.id === l.tag);
+          return (l.name || '').toLowerCase().includes(q)
+              || (l.url  || '').toLowerCase().includes(q)
+              || (l.tag  || '').toLowerCase().includes(q)
+              || (tag && (tag.label || '').toLowerCase().includes(q));
+        })
+      : state.links;
+
+    $('#count').textContent = filteredLinks.length;
+
+    // group by tag
+    const byTag = {};
+    filteredLinks.forEach(l => {
+      const t = l.tag || 'autres';
+      (byTag[t] = byTag[t] || []).push(l);
+    });
+    // include empty tag cards in edit mode
+    let visibleTagIds = state.editMode
+      ? state.tags.map(t => t.id)
+      : state.tags.map(t => t.id).filter(id => byTag[id] && byTag[id].length);
+    // featured tags first, preserving relative order otherwise
+    visibleTagIds = visibleTagIds.slice().sort((a, b) => {
+      const ta = state.tags.find(t => t.id === a);
+      const tb = state.tags.find(t => t.id === b);
+      return (tb && tb.featured ? 1 : 0) - (ta && ta.featured ? 1 : 0);
+    });
+    // orphans (tag deleted but link still references)
+    const orphans = Object.keys(byTag).filter(id => !state.tags.find(t => t.id === id));
+
+    const grid = $('#grid');
+    if (!state.links.length) {
+      grid.innerHTML = '';
+      grid.appendChild(emptyState());
+      return;
+    }
+    if (q && !filteredLinks.length) {
+      grid.innerHTML = '';
+      const el = document.createElement('div');
+      el.className = 'empty-state';
+      el.innerHTML = '<h2>Aucun résultat</h2><p>Aucun favori ne correspond à « ' + escapeHtml(search) + ' ».</p>';
+      grid.appendChild(el);
+      return;
+    }
+    grid.innerHTML = '';
+    grid.className = 'grid';
+    visibleTagIds.concat(orphans).forEach(tagId => {
+      grid.appendChild(tagCard(tagId, byTag[tagId] || []));
+    });
+  }
+
+  function emptyState() {
+    const el = document.createElement('div');
+    el.className = 'empty-state';
+    el.innerHTML = '<h2>Aucun favori</h2><p>Ajoute ton premier lien pour démarrer.</p>';
+    const b = document.createElement('button');
+    b.className = 'btn primary';
+    b.innerHTML = '<i class="ph ph-plus"></i> Ajouter un lien';
+    b.onclick = () => openLinkModal();
+    el.appendChild(b);
+    return el;
+  }
+
+  function tagCard(tagId, links) {
+    const tag = state.tags.find(t => t.id === tagId)
+      || { id: tagId, label: tagId, color: '#64748b' };
+
+    const card = document.createElement('section');
+    card.className = 'tag-card' + (tag.featured ? ' featured' : '');
+    card.style.setProperty('--tag-color', tag.color);
+
+    // header
+    if (tag.collapsed) card.classList.add('collapsed');
+
+    const head = document.createElement('header');
+    const bar = document.createElement('span');
+    bar.className = 'bar'; bar.style.background = tag.color;
+    head.appendChild(bar);
+
+    // Fold/unfold caret
+    const foldBtn = document.createElement('button');
+    foldBtn.className = 'fold';
+    foldBtn.title = tag.collapsed ? 'Déplier' : 'Plier';
+    foldBtn.setAttribute('aria-label', foldBtn.title);
+    foldBtn.setAttribute('aria-expanded', tag.collapsed ? 'false' : 'true');
+    foldBtn.innerHTML = '<i class="ph ph-caret-down"></i>';
+    foldBtn.onclick = () => { tag.collapsed = !tag.collapsed; save(); render(); };
+    head.appendChild(foldBtn);
+
+    const labelWrap = document.createElement('span');
+    labelWrap.className = 'label';
+    labelWrap.style.color = tag.color;
+    if (tag.featured) {
+      const star = document.createElement('span');
+      star.className = 'star';
+      star.innerHTML = '<i class="ph-fill ph-star"></i>';
+      labelWrap.appendChild(star);
+    }
+    if (state.editMode) {
+      const ip = document.createElement('input');
+      ip.value = tag.label;
+      ip.spellcheck = false;
+      ip.onchange = () => { tag.label = ip.value.trim() || tag.id; save(); render(); };
+      labelWrap.appendChild(ip);
+    } else {
+      const sp = document.createElement('span');
+      sp.textContent = tag.label;
+      labelWrap.appendChild(sp);
+    }
+    head.appendChild(labelWrap);
+
+    const num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = links.length;
+    head.appendChild(num);
+
+    const actions = document.createElement('span');
+    actions.className = 'actions';
+    const starBtn = document.createElement('button');
+    starBtn.title = tag.featured ? 'Retirer la mise en avant' : 'Mettre ce tag en avant';
+    starBtn.setAttribute('aria-label', starBtn.title);
+    starBtn.className = 'star-toggle' + (tag.featured ? ' on' : '');
+    starBtn.innerHTML = '<i class="' + (tag.featured ? 'ph-fill' : 'ph') + ' ph-star"></i>';
+    starBtn.onclick = () => { tag.featured = !tag.featured; save(); render(); };
+    actions.appendChild(starBtn);
+    actions.appendChild(iconButton('plus', 'Ajouter un lien dans ce tag', () => openLinkModal(null, tag.id)));
+    if (state.editMode) {
+      actions.appendChild(iconButton('palette', 'Changer la couleur', e => openColorPopover(e, tag)));
+      actions.appendChild(iconButton('trash', 'Supprimer ce tag', () => deleteTag(tag.id)));
+    }
+    head.appendChild(actions);
+
+    card.appendChild(head);
+
+    // list
+    const ul = document.createElement('ul');
+    if (!links.length) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'Vide';
+      li.style.justifyContent = 'center';
+      ul.appendChild(li);
+    } else {
+      links.forEach(l => ul.appendChild(linkRow(l, tag)));
+    }
+    card.appendChild(ul);
+
+    // add row (in edit mode)
+    const adder = document.createElement('div');
+    adder.className = 'add-row';
+    const addBtn = document.createElement('button');
+    addBtn.innerHTML = '<i class="ph ph-plus"></i> Ajouter dans ' + escapeHtml(tag.label);
+    addBtn.onclick = () => openLinkModal(null, tag.id);
+    adder.appendChild(addBtn);
+    card.appendChild(adder);
+
+    // --- Drag & drop wiring (edit mode only) ---
+    if (state.editMode) {
+      // Grip in the header → grab the whole card to reorder tags
+      const grip = makeGrip('Glisser pour réordonner le tag');
+      head.insertBefore(grip, head.firstChild);
+      card.draggable = false;
+      bindHandleDrag(card, grip);
+
+      card.addEventListener('dragstart', e => {
+        if (!card.draggable) { e.preventDefault(); return; }
+        dnd = { kind: 'tag', id: tag.id };
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', 'tag:' + tag.id);
+        setTimeout(() => card.classList.add('dragging'), 0);
+      });
+      card.addEventListener('dragend', () => { card.classList.remove('dragging'); clearDropMarks(); dnd = null; });
+
+      card.addEventListener('dragover', e => {
+        if (!dnd) return;
+        if (dnd.kind === 'tag') {
+          if (dnd.id === tag.id) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          card.classList.add('drop-target');
+        } else if (dnd.kind === 'link') {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          if (dnd.fromTag !== tag.id) ul.classList.add('drop-into');
+        }
+      });
+      card.addEventListener('dragleave', e => {
+        if (!card.contains(e.relatedTarget)) { card.classList.remove('drop-target'); ul.classList.remove('drop-into'); }
+      });
+      card.addEventListener('drop', e => {
+        if (!dnd) return;
+        e.preventDefault();
+        const kind = dnd.kind, id = dnd.id;
+        clearDropMarks();
+        if (kind === 'tag') { reorderTag(id, tag.id); }
+        else if (kind === 'link') { moveLinkToTagEnd(id, tag.id); }
+        dnd = null;
+        save(); render();
+      });
+    }
+
+    return card;
+  }
+
+  function linkRow(link, tag) {
+    const li = document.createElement('li');
+
+    // favicon or generic
+    const fv = favicon(link.url);
+    if (fv) {
+      const img = document.createElement('img');
+      img.src = fv; img.width = 16; img.height = 16;
+      img.draggable = false;
+      img.style.borderRadius = '3px';
+      img.style.flexShrink = '0';
+      img.onerror = () => {
+        const ic = document.createElement('i');
+        ic.className = 'ph ph-link link-icon';
+        img.replaceWith(ic);
+      };
+      li.appendChild(img);
+    } else {
+      const ic = document.createElement('i');
+      ic.className = 'ph ph-link link-icon';
+      li.appendChild(ic);
+    }
+
+    const a = document.createElement('a');
+    a.className = 'name';
+    a.draggable = false;
+    a.href = link.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    // Tooltip exposes the full title (which may be truncated visually) plus
+    // the URL on a second line, so a hover always reveals what the row is.
+    a.title = (link.name ? link.name + '\n' : '') + link.url;
+    a.textContent = link.name || link.url;
+    li.appendChild(a);
+
+    const rowActions = document.createElement('span');
+    rowActions.className = 'row-actions';
+    rowActions.appendChild(iconButton('arrow-square-out', 'Ouvrir', () => window.open(link.url, '_blank', 'noopener')));
+    rowActions.appendChild(iconButton('copy', 'Copier l\u2019URL', () => copyText(link.url, link.name)));
+    rowActions.appendChild(iconButton('pencil-simple', 'Modifier', () => openLinkModal(link)));
+    rowActions.appendChild(iconButton('trash', 'Supprimer', () => deleteLink(link.id)));
+    li.appendChild(rowActions);
+
+    // --- Drag & drop wiring (edit mode only) ---
+    if (state.editMode) {
+      const grip = makeGrip('Glisser pour réordonner');
+      li.insertBefore(grip, li.firstChild);
+      li.draggable = false;
+      bindHandleDrag(li, grip);
+
+      li.addEventListener('dragstart', e => {
+        if (!li.draggable) { e.preventDefault(); return; }
+        e.stopPropagation();
+        dnd = { kind: 'link', id: link.id, fromTag: tag.id };
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', 'link:' + link.id);
+        setTimeout(() => li.classList.add('dragging'), 0);
+      });
+      li.addEventListener('dragend', () => { li.classList.remove('dragging'); clearDropMarks(); dnd = null; });
+
+      li.addEventListener('dragover', e => {
+        if (!dnd || dnd.kind !== 'link' || dnd.id === link.id) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        const r = li.getBoundingClientRect();
+        const after = e.clientY > r.top + r.height / 2;
+        li.classList.toggle('drop-after', after);
+        li.classList.toggle('drop-before', !after);
+      });
+      li.addEventListener('dragleave', () => li.classList.remove('drop-before', 'drop-after'));
+      li.addEventListener('drop', e => {
+        if (!dnd || dnd.kind !== 'link') return;
+        e.preventDefault();
+        e.stopPropagation();
+        const r = li.getBoundingClientRect();
+        const after = e.clientY > r.top + r.height / 2;
+        const dragId = dnd.id;
+        clearDropMarks();
+        moveLinkRelative(dragId, link.id, tag.id, after);
+        dnd = null;
+        save(); render();
+      });
+    }
+
+    return li;
+  }
+
+  function iconButton(name, title, onClick) {
+    const b = document.createElement('button');
+    b.title = title;
+    b.setAttribute('aria-label', title);
+    b.innerHTML = '<i class="ph ph-' + name + '"></i>';
+    b.onclick = onClick;
+    return b;
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+      { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]
+    ));
+  }
+
+  // ============================================================
+  // Drag & drop (réordonner liens + tags, en mode édition)
+  // ============================================================
+  let dnd = null; // { kind:'tag'|'link', id, fromTag }
+
+  // Build the grip affordance shown in edit mode
+  function makeGrip(title) {
+    const g = document.createElement('span');
+    g.className = 'drag-handle';
+    g.title = title;
+    g.setAttribute('aria-label', title);
+    g.innerHTML = '<i class="ph ph-dots-six-vertical"></i>';
+    return g;
+  }
+
+  // Restrict native drag so it only starts from the grip handle. The drag
+  // element is flagged draggable on the handle's press, then reset on dragend.
+  function bindHandleDrag(dragEl, handleEl) {
+    const arm = () => { dragEl.draggable = true; };
+    const disarm = () => { dragEl.draggable = false; };
+    handleEl.addEventListener('mousedown', arm);
+    handleEl.addEventListener('touchstart', arm, { passive: true });
+    handleEl.addEventListener('mouseup', disarm);
+    handleEl.addEventListener('touchend', disarm);
+    dragEl.addEventListener('dragend', disarm);
+  }
+
+  function clearDropMarks() {
+    document.querySelectorAll('.drop-target, .drop-into, .drop-before, .drop-after')
+      .forEach(el => el.classList.remove('drop-target', 'drop-into', 'drop-before', 'drop-after'));
+  }
+
+  // Move tag `dragId` to the slot occupied by `targetId`.
+  function reorderTag(dragId, targetId) {
+    if (dragId === targetId) return;
+    const arr = state.tags;
+    const from = arr.findIndex(t => t.id === dragId);
+    const to = arr.findIndex(t => t.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = arr.splice(from, 1);
+    let insertAt = arr.findIndex(t => t.id === targetId);
+    if (from < to) insertAt += 1; // dragged from before → land just after target
+    arr.splice(insertAt, 0, moved);
+  }
+
+  // Move link `dragId` next to `targetId`, re-tagging it to `targetTag`.
+  function moveLinkRelative(dragId, targetId, targetTag, after) {
+    if (dragId === targetId) return;
+    const arr = state.links;
+    const from = arr.findIndex(l => l.id === dragId);
+    if (from < 0) return;
+    const [moved] = arr.splice(from, 1);
+    moved.tag = targetTag;
+    let ti = arr.findIndex(l => l.id === targetId);
+    if (ti < 0) { arr.push(moved); return; }
+    arr.splice(after ? ti + 1 : ti, 0, moved);
+  }
+
+  // Drop a link into a tag with no specific target row → append to that tag.
+  function moveLinkToTagEnd(dragId, targetTag) {
+    const arr = state.links;
+    const from = arr.findIndex(l => l.id === dragId);
+    if (from < 0) return;
+    const [moved] = arr.splice(from, 1);
+    moved.tag = targetTag;
+    let lastIdx = -1;
+    for (let i = 0; i < arr.length; i++) if (arr[i].tag === targetTag) lastIdx = i;
+    if (lastIdx < 0) arr.push(moved);
+    else arr.splice(lastIdx + 1, 0, moved);
+  }
+
+  // ============================================================
+  // Actions
+  // ============================================================
+  function deleteLink(id) {
+    state.links = state.links.filter(l => l.id !== id);
+    save(); render();
+    toast('Lien supprimé');
+  }
+  function deleteTag(id) {
+    const count = state.links.filter(l => l.tag === id).length;
+    if (count > 0) {
+      if (!confirm('Supprimer ce tag ? ' + count + ' lien(s) deviendront sans tag.')) return;
+    }
+    state.tags = state.tags.filter(t => t.id !== id);
+    state.links = state.links.map(l => l.tag === id ? Object.assign({}, l, { tag: '' }) : l);
+    save(); render();
+  }
+  function copyText(text, name) {
+    if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+    toast('Copié : ' + (name || text));
+  }
+
+  // ============================================================
+  // Modals
+  // ============================================================
+  function closeModal() {
+    modal = null;
+    $('#modal-root').innerHTML = '';
+  }
+
+  function openLinkModal(existing, defaultTag) {
+    const isNew = !existing;
+    const draft = existing
+      ? Object.assign({}, existing)
+      : { id: uid(), name: '', url: '', tag: defaultTag || (state.tags[0] && state.tags[0].id) || '' };
+
+    const root = $('#modal-root');
+    root.innerHTML = '';
+    const scrim = document.createElement('div');
+    scrim.className = 'scrim';
+    scrim.onclick = e => { if (e.target === scrim) closeModal(); };
+
+    const m = document.createElement('div');
+    m.className = 'modal';
+    m.innerHTML = `
+      <header>
+        <h3>${isNew ? 'Nouveau lien' : 'Modifier le lien'}</h3>
+        <button class="btn ghost icon-only" id="x"><i class="ph ph-x"></i></button>
+      </header>
+      <div class="body">
+        <div class="field">
+          <label>Nom</label>
+          <input id="f-name" placeholder="Ex. Documentation interne" value="${escapeHtml(draft.name)}">
+        </div>
+        <div class="field">
+          <label>URL</label>
+          <input id="f-url" placeholder="https://…" value="${escapeHtml(draft.url)}">
+        </div>
+        <div class="field">
+          <label>Tag</label>
+          <select id="f-tag">
+            ${state.tags.map(t => '<option value="'+escapeHtml(t.id)+'"'+(t.id===draft.tag?' selected':'')+'>'+escapeHtml(t.label)+'</option>').join('')}
+            <option value="__new__">＋ Nouveau tag…</option>
+          </select>
+        </div>
+        <div class="field" id="new-tag-fields" style="display:none">
+          <label>Nom du nouveau tag</label>
+          <input id="f-new-tag" placeholder="Ex. Recettes">
+          <div class="color-swatches" id="f-new-color"></div>
+        </div>
+      </div>
+      <footer>
+        ${isNew ? '' : '<button class="btn" id="del" style="margin-right:auto;color:var(--cv-fg-danger)"><i class="ph ph-trash"></i> Supprimer</button>'}
+        <button class="btn" id="cancel">Annuler</button>
+        <button class="btn primary" id="ok">${isNew ? 'Ajouter' : 'Enregistrer'}</button>
+      </footer>
+    `;
+    scrim.appendChild(m);
+    root.appendChild(scrim);
+
+    const tagSel = m.querySelector('#f-tag');
+    const newTagWrap = m.querySelector('#new-tag-fields');
+    const newColorWrap = m.querySelector('#f-new-color');
+    let newColor = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+    function paintSwatches() {
+      newColorWrap.innerHTML = '';
+      PALETTE.forEach(c => {
+        const b = document.createElement('button');
+        b.style.background = c;
+        if (c === newColor) b.classList.add('sel');
+        b.onclick = () => { newColor = c; paintSwatches(); };
+        newColorWrap.appendChild(b);
+      });
+    }
+    paintSwatches();
+    tagSel.onchange = () => {
+      newTagWrap.style.display = tagSel.value === '__new__' ? 'flex' : 'none';
+    };
+
+    m.querySelector('#x').onclick = closeModal;
+    m.querySelector('#cancel').onclick = closeModal;
+    if (!isNew) m.querySelector('#del').onclick = () => {
+      if (confirm('Supprimer ce lien ?')) { closeModal(); deleteLink(draft.id); }
+    };
+    m.querySelector('#ok').onclick = () => {
+      const name = m.querySelector('#f-name').value.trim();
+      let url = m.querySelector('#f-url').value.trim();
+      let tagId = tagSel.value;
+      if (!url) { m.querySelector('#f-url').focus(); return; }
+      if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+      if (tagId === '__new__') {
+        const label = m.querySelector('#f-new-tag').value.trim();
+        if (!label) { m.querySelector('#f-new-tag').focus(); return; }
+        const tid = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || uid();
+        if (!state.tags.find(t => t.id === tid)) {
+          state.tags.push({ id: tid, label, color: newColor });
+        }
+        tagId = tid;
+      }
+      const final = { id: draft.id, name: name || url, url, tag: tagId };
+      if (isNew) state.links.push(final);
+      else state.links = state.links.map(l => l.id === final.id ? final : l);
+      save(); closeModal(); render();
+      toast(isNew ? 'Lien ajouté' : 'Lien mis à jour');
+    };
+
+    setTimeout(() => m.querySelector('#f-name').focus(), 30);
+  }
+
+  function openColorPopover(evt, tag) {
+    evt.stopPropagation();
+    const root = $('#modal-root');
+    root.innerHTML = '';
+    const scrim = document.createElement('div');
+    scrim.className = 'scrim';
+    scrim.onclick = e => { if (e.target === scrim) closeModal(); };
+    const m = document.createElement('div');
+    m.className = 'modal';
+    m.style.maxWidth = '320px';
+    m.innerHTML = `
+      <header><h3>Couleur du tag</h3>
+        <button class="btn ghost icon-only" id="x"><i class="ph ph-x"></i></button>
+      </header>
+      <div class="body">
+        <div class="color-swatches" id="sw"></div>
+      </div>
+    `;
+    scrim.appendChild(m); root.appendChild(scrim);
+    const sw = m.querySelector('#sw');
+    PALETTE.forEach(c => {
+      const b = document.createElement('button');
+      b.style.background = c; b.style.width = '32px'; b.style.height = '32px';
+      if (c === tag.color) b.classList.add('sel');
+      b.onclick = () => { tag.color = c; save(); closeModal(); render(); };
+      sw.appendChild(b);
+    });
+    m.querySelector('#x').onclick = closeModal;
+  }
+
+  function openMenu(evt) {
+    evt.stopPropagation();
+    const root = $('#modal-root');
+    root.innerHTML = '';
+    const scrim = document.createElement('div');
+    scrim.className = 'scrim';
+    scrim.style.alignItems = 'flex-start';
+    scrim.style.justifyContent = 'flex-end';
+    scrim.style.padding = '72px 24px';
+    scrim.onclick = e => { if (e.target === scrim) closeModal(); };
+    const m = document.createElement('div');
+    m.className = 'modal';
+    m.style.maxWidth = '260px';
+    m.innerHTML = `
+      <div class="body" style="padding:8px;gap:2px">
+        <button class="btn ghost" id="m-tag"  style="justify-content:flex-start"><i class="ph ph-tag"></i> Nouveau tag</button>
+        <button class="btn ghost" id="m-exp"  style="justify-content:flex-start"><i class="ph ph-download-simple"></i> Exporter (JSON)</button>
+        <button class="btn ghost" id="m-imp"  style="justify-content:flex-start"><i class="ph ph-upload-simple"></i> Importer (JSON)</button>
+        <button class="btn ghost" id="m-theme" style="justify-content:flex-start"><i class="ph ph-moon"></i> Basculer thème</button>
+        <button class="btn ghost" id="m-clear" style="justify-content:flex-start;color:var(--cv-fg-danger)"><i class="ph ph-trash"></i> Tout effacer</button>
+      </div>
+    `;
+    scrim.appendChild(m); root.appendChild(scrim);
+    m.querySelector('#m-tag').onclick = () => { closeModal(); openNewTagModal(); };
+    m.querySelector('#m-exp').onclick = () => { closeModal(); exportJson(); };
+    m.querySelector('#m-imp').onclick = () => { closeModal(); importJson(); };
+    m.querySelector('#m-theme').onclick = () => { closeModal(); toggleTheme(); };
+    m.querySelector('#m-clear').onclick = () => {
+      if (confirm('Effacer tous les favoris et tags de l’espace « ' + currentSpace().label + ' » ? Cette action est irréversible.')) {
+        closeModal();
+        localStorage.removeItem(DATA_KEY_PREFIX + currentSpaceId);
+        state = loadData(); save(); render();
+      } else closeModal();
+    };
+  }
+
+  function openNewTagModal() {
+    const root = $('#modal-root');
+    root.innerHTML = '';
+    const scrim = document.createElement('div');
+    scrim.className = 'scrim';
+    scrim.onclick = e => { if (e.target === scrim) closeModal(); };
+    const m = document.createElement('div');
+    m.className = 'modal';
+    let color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+    m.innerHTML = `
+      <header><h3>Nouveau tag</h3>
+        <button class="btn ghost icon-only" id="x"><i class="ph ph-x"></i></button>
+      </header>
+      <div class="body">
+        <div class="field">
+          <label>Nom</label>
+          <input id="f-label" placeholder="Ex. Recettes">
+        </div>
+        <div class="field">
+          <label>Couleur</label>
+          <div class="color-swatches" id="sw"></div>
+        </div>
+      </div>
+      <footer>
+        <button class="btn" id="cancel">Annuler</button>
+        <button class="btn primary" id="ok">Créer</button>
+      </footer>
+    `;
+    scrim.appendChild(m); root.appendChild(scrim);
+    const sw = m.querySelector('#sw');
+    function paint() {
+      sw.innerHTML = '';
+      PALETTE.forEach(c => {
+        const b = document.createElement('button');
+        b.style.background = c;
+        if (c === color) b.classList.add('sel');
+        b.onclick = () => { color = c; paint(); };
+        sw.appendChild(b);
+      });
+    }
+    paint();
+    m.querySelector('#x').onclick = closeModal;
+    m.querySelector('#cancel').onclick = closeModal;
+    m.querySelector('#ok').onclick = () => {
+      const label = m.querySelector('#f-label').value.trim();
+      if (!label) return;
+      let id = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      if (!id) id = uid();
+      if (state.tags.find(t => t.id === id)) id = id + '-' + uid().slice(0, 4);
+      state.tags.push({ id, label, color });
+      save(); closeModal(); render();
+    };
+    setTimeout(() => m.querySelector('#f-label').focus(), 30);
+  }
+
+  // ============================================================
+  // Import / export / theme
+  // ============================================================
+  function exportJson() {
+    const blob = new Blob([JSON.stringify({
+      space: currentSpace().label,
+      tags: state.tags,
+      links: state.links,
+    }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'favoris-' + slugify(currentSpace().label) + '-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  function importJson() {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'application/json';
+    inp.onchange = () => {
+      const f = inp.files[0]; if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (!Array.isArray(data.links) || !Array.isArray(data.tags)) throw 0;
+          if (confirm('Remplacer les favoris de l’espace « ' + currentSpace().label + ' » par les ' + data.links.length + ' liens importés ?')) {
+            state.tags = data.tags;
+            state.links = data.links;
+            save(); render();
+            toast('Import effectué');
+          }
+        } catch (e) { alert('Fichier invalide'); }
+      };
+      reader.readAsText(f);
+    };
+    inp.click();
+  }
+  function toggleTheme() {
+    const cur = document.documentElement.getAttribute('data-theme');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('favoris.theme', next);
+  }
+
+  // ============================================================
+  // Toast
+  // ============================================================
+  let toastTimer = null;
+  function toast(msg) {
+    const root = $('#toast-root');
+    root.innerHTML = '<div class="toast">' + escapeHtml(msg) + '</div>';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { root.innerHTML = ''; }, 1800);
+  }
+
+  // ============================================================
+  // Wire-up
+  // ============================================================
+  $('#add-link').onclick = () => openLinkModal();
+  $('#toggle-edit').onclick = () => { state.editMode = !state.editMode; save(); render(); };
+  $('#menu-btn').onclick = openMenu;
+  $('#space-btn').onclick = openSpaceMenu;
+  $('#search').oninput = e => { search = e.target.value; render(); };
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && modal !== null) closeModal();
+    if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+      e.preventDefault(); $('#search').focus();
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault(); $('#search').focus();
+    }
+  });
+
+  // Restore theme
+  const savedTheme = localStorage.getItem('favoris.theme');
+  if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+
+  renderSpaceChip();
+  render();
+  </script>
+</body>
+</html>
