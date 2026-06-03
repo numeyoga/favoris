@@ -581,10 +581,18 @@
   <div id="modal-root"></div>
   <div id="toast-root"></div>
 
-  <script>
+  <script type="module">
   // ============================================================
   // State + persistence (multi-espaces)
   // ============================================================
+  // La logique pure (constantes, slug, recherche, formes de données…) vit dans
+  // ./assets/core.js et est partagée avec la suite de tests.
+  import {
+    PALETTE, uid, slugify, favicon,
+    makeSpaceId, isSpaceSynced, filterLinks,
+    emptyData, seededData, removeLink, removeTag,
+  } from './assets/core.js';
+
   // Storage keys:
   //   favoris.spaces        → [{ id, label, createdAt }]
   //   favoris.currentSpace  → id of the active space
@@ -594,26 +602,6 @@
   const DATA_KEY_PREFIX = 'favoris.v1:';
   // Backwards-compat: previous versions stored everything under a single key.
   const LEGACY_KEY = 'favoris.v1';
-
-  const DEFAULT_TAGS = [
-    { id: 'docs',     label: 'Documentation', color: '#6366f1', featured: true },
-    { id: 'tools',    label: 'Outils',        color: '#0d9488' },
-    { id: 'reading',  label: 'Lecture',       color: '#d97706' },
-    { id: 'inspire',  label: 'Inspiration',   color: '#db2777' },
-  ];
-  const PALETTE = [
-    '#2563eb', '#0d9488', '#8b5cf6', '#d97706',
-    '#16a34a', '#db2777', '#6366f1', '#64748b',
-    '#f43f5e', '#0891b2', '#84cc16', '#a855f7',
-  ];
-
-  function uid() { return Math.random().toString(36).slice(2, 10); }
-  function slugify(s) {
-    return String(s || '').toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
-  }
 
   // ---- Spaces ------------------------------------------------
   function loadSpaces() {
@@ -659,14 +647,8 @@
   function currentSpace() {
     return spaces.find(s => s.id === currentSpaceId) || spaces[0];
   }
-  function makeSpaceId(label) {
-    let base = slugify(label) || uid();
-    let id = base, i = 1;
-    while (spaces.find(s => s.id === id)) id = base + '-' + (++i);
-    return id;
-  }
   function createSpace(label) {
-    const id = makeSpaceId(label);
+    const id = makeSpaceId(spaces, label);
     // Local par défaut : la synchronisation est un opt-in par espace.
     spaces.push({ id, label: label.trim() || id, createdAt: Date.now(), synced: false });
     saveSpaces();
@@ -678,7 +660,7 @@
   function duplicateSpace(srcId) {
     const src = spaces.find(s => s.id === srcId); if (!src) return;
     const label = src.label + ' (copie)';
-    const id = makeSpaceId(label);
+    const id = makeSpaceId(spaces, label);
     // On hérite du drapeau de la source : la copie d'un espace sensible reste locale.
     spaces.push({ id, label, createdAt: Date.now(), synced: src.synced === true });
     saveSpaces();
@@ -690,11 +672,6 @@
     const s = spaces.find(s => s.id === id); if (!s) return;
     s.label = label.trim() || s.label;
     saveSpaces();
-  }
-  // Un espace est synchronisé seulement si synced === true (local par défaut).
-  function spaceIsSynced(id) {
-    const s = spaces.find(s => s.id === id);
-    return !!(s && s.synced === true);
   }
   // Bascule la synchro d'un espace et réconcilie l'état distant via le moteur.
   function setSpaceSynced(id, on) {
@@ -727,26 +704,7 @@
   }
 
   // ---- Per-space data ----------------------------------------
-  function emptyData() {
-    return {
-      tags: DEFAULT_TAGS.slice(),
-      links: [],
-      editMode: false,
-    };
-  }
-  function seededData() {
-    return {
-      tags: DEFAULT_TAGS.slice(),
-      links: [
-        { id: uid(), name: 'MDN Web Docs',    url: 'https://developer.mozilla.org', tag: 'docs' },
-        { id: uid(), name: 'Can I Use',       url: 'https://caniuse.com',           tag: 'docs' },
-        { id: uid(), name: 'GitHub',          url: 'https://github.com',            tag: 'tools' },
-        { id: uid(), name: 'Hacker News',     url: 'https://news.ycombinator.com',  tag: 'reading' },
-        { id: uid(), name: 'Are.na',          url: 'https://are.na',                tag: 'inspire' },
-      ],
-      editMode: false,
-    };
-  }
+  // emptyData() / seededData() proviennent de core.js.
   function loadData() {
     const key = DATA_KEY_PREFIX + currentSpaceId;
     try {
@@ -855,7 +813,7 @@
 
         // Bascule de synchro : indicateur de statut, dans son propre conteneur
         // toujours visible (les autres actions n'apparaissent qu'au survol).
-        const synced = s.synced === true;
+        const synced = isSpaceSynced(spaces, s.id);
         const status = document.createElement('span');
         status.className = 'row-status';
         const cloudBtn = iconButton(
@@ -914,28 +872,13 @@
   // Render
   // ============================================================
   const $ = sel => document.querySelector(sel);
-
-  function favicon(url) {
-    try {
-      const host = new URL(url).hostname;
-      return 'https://www.google.com/s2/favicons?sz=32&domain=' + host;
-    } catch (e) { return ''; }
-  }
+  // favicon() provient de core.js.
 
   function render() {
     document.body.classList.toggle('edit', !!state.editMode);
     $('#edit-label').textContent = state.editMode ? 'Terminer' : 'Éditer';
 
-    const q = search.trim().toLowerCase();
-    const filteredLinks = q
-      ? state.links.filter(l => {
-          const tag = state.tags.find(t => t.id === l.tag);
-          return (l.name || '').toLowerCase().includes(q)
-              || (l.url  || '').toLowerCase().includes(q)
-              || (l.tag  || '').toLowerCase().includes(q)
-              || (tag && (tag.label || '').toLowerCase().includes(q));
-        })
-      : state.links;
+    const filteredLinks = filterLinks(state.links, state.tags, search);
 
     $('#count').textContent = filteredLinks.length;
 
@@ -964,7 +907,7 @@
       grid.appendChild(emptyState());
       return;
     }
-    if (q && !filteredLinks.length) {
+    if (search.trim() && !filteredLinks.length) {
       grid.innerHTML = '';
       const el = document.createElement('div');
       el.className = 'empty-state';
@@ -1308,7 +1251,7 @@
   // Actions
   // ============================================================
   function deleteLink(id) {
-    state.links = state.links.filter(l => l.id !== id);
+    state.links = removeLink(state.links, id);
     save(); render();
     toast('Lien supprimé');
   }
@@ -1317,8 +1260,9 @@
     if (count > 0) {
       if (!confirm('Supprimer ce tag ? ' + count + ' lien(s) deviendront sans tag.')) return;
     }
-    state.tags = state.tags.filter(t => t.id !== id);
-    state.links = state.links.map(l => l.tag === id ? Object.assign({}, l, { tag: '' }) : l);
+    const next = removeTag(state.tags, state.links, id);
+    state.tags = next.tags;
+    state.links = next.links;
     save(); render();
   }
   function copyText(text, name) {
