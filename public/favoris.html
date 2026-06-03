@@ -553,6 +553,9 @@
         <i class="ph ph-pencil-simple"></i>
         <span id="edit-label">Éditer</span>
       </button>
+      <button class="btn ghost icon-only" id="sync-btn" title="Synchronisation">
+        <i class="ph ph-cloud-slash"></i>
+      </button>
       <button class="btn ghost icon-only" id="menu-btn" title="Plus">
         <i class="ph ph-dots-three-vertical"></i>
       </button>
@@ -1577,8 +1580,21 @@
   const savedTheme = localStorage.getItem('favoris.theme');
   if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
 
+  // Hook appelé par le module de synchronisation après l'application de
+  // changements distants : recharge l'état depuis localStorage et redessine.
+  window.favorisApplyExternalChange = function () {
+    spaces = loadSpaces() || spaces;
+    if (!spaces.find(s => s.id === currentSpaceId)) currentSpaceId = spaces[0].id;
+    state = loadData();
+    renderSpaceChip();
+    render();
+  };
+
   renderSpaceChip();
   render();
   </script>
+  <!-- Synchronisation optionnelle (localStorage-first). Sans backend
+       configuré, ce module ne charge aucun SDK et l'app reste hors-ligne. -->
+  <script type="module" src="assets/sync/index.js"></script>
 </body>
 </html>
