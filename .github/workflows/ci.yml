@@ -1,0 +1,49 @@
+name: CI & Déploiement
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Permissions nécessaires au déploiement GitHub Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un seul déploiement Pages à la fois ; on n'annule pas un déploiement en cours.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # ---- Qualité du code + tests (sur chaque push et chaque PR) ----
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build # lint + format:check + tests
+
+  # ---- Déploiement du dossier public/ sur GitHub Pages (uniquement main) ----
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          # On ne publie QUE les fichiers statiques de l'app : aucun framework,
+          # aucune dépendance de dev n'est embarquée.
+          path: public
+      - id: deployment
+        uses: actions/deploy-pages@v4
