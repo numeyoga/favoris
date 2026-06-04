@@ -21,6 +21,9 @@ export function initUI(sync) {
     if (!s.configured) {
       btn.title = 'Synchronisation : non configurée';
       icon.className = 'ph ph-cloud-slash';
+    } else if (s.error && !s.user) {
+      btn.title = 'Erreur de synchronisation : ' + s.error;
+      icon.className = 'ph ph-cloud-warning';
     } else if (s.user) {
       btn.title = 'Synchronisé : ' + s.user.email + (s.pending ? ' · envoi en cours…' : '');
       icon.className = s.pending ? 'ph ph-cloud-arrow-up' : 'ph ph-cloud-check';
@@ -145,7 +148,7 @@ function openModal(sync) {
         render();
       } catch (e) {
         console.warn(e);
-        toast('Échec : vérifiez les identifiants');
+        toast(e.message || 'Échec : vérifiez les identifiants');
         ok.disabled = false;
         ok.textContent = 'Enregistrer';
       }
@@ -157,6 +160,17 @@ function openModal(sync) {
 
   // ---- Écran 2 : connexion (magic-link) ----------------------
   function renderSignIn(s, body, rerender, close, toast) {
+    if (s.error) {
+      body.appendChild(
+        el(
+          'p',
+          null,
+          '<span style="color:var(--cv-fg-danger);font-size:12px">Erreur : ' +
+            s.error +
+            '</span>'
+        )
+      );
+    }
     body.appendChild(
       el(
         'p',
@@ -197,9 +211,9 @@ function openModal(sync) {
         close();
       } catch (e) {
         console.warn(e);
-        toast('Échec de l’envoi');
+        toast(e.message || ‘Échec de l\’envoi’);
         send.disabled = false;
-        send.textContent = 'Recevoir le lien';
+        send.textContent = ‘Recevoir le lien’;
       }
     };
     foot.appendChild(reconf);
@@ -235,7 +249,7 @@ function openModal(sync) {
         await sync.syncNow();
         toast('Synchronisé');
       } catch (e) {
-        toast('Échec de la sync');
+        toast(e.message || 'Échec de la sync');
       }
       syncBtn.disabled = false;
       render();

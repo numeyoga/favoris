@@ -44,6 +44,7 @@ export const sync = {
   config: null,
   meta: {},
   _user: null,
+  _error: null,
   applying: false, // garde anti-boucle pendant l'application du distant
   pushTimer: null,
   listeners: new Set(),
@@ -73,6 +74,7 @@ export const sync = {
       adapters: Object.values(this.adapters).map((a) => ({ id: a.id, label: a.label })),
       user: this._user,
       pending: Object.values(this.meta).some((m) => !m.synced),
+      error: this._error,
     };
   },
 
@@ -117,6 +119,7 @@ export const sync = {
         await this._activate();
       } catch (e) {
         console.warn('[sync] init', e);
+        this._error = e.message || String(e);
       }
     }
     this.emit();
@@ -130,6 +133,7 @@ export const sync = {
   },
 
   async _activate() {
+    this._error = null;
     const adapter = this.adapters[this.config.provider];
     if (!adapter) throw new Error('Adapter inconnu : ' + this.config.provider);
     this.adapter = adapter;
