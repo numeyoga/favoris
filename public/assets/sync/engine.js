@@ -136,7 +136,14 @@ export const sync = {
     await adapter.init(this.config.settings);
     if (adapter.completeFromUrl) await adapter.completeFromUrl();
     this._user = await adapter.currentUser();
-    if (this._user) await this.pullAndApply();
+    if (this._user) {
+      try {
+        await this.pullAndApply();
+      } catch (e) {
+        if (e && e.code === 401) this._user = null;
+        throw e;
+      }
+    }
   },
 
   async forget() {
