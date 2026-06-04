@@ -20,7 +20,7 @@ const TYPES = {
 const server = createServer(async (req, res) => {
   try {
     let path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-    if (path === '/') path = '/favoris.html';
+    if (path === '/') path = '/index.html';
     // Empêche toute remontée hors de ROOT.
     const filePath = join(ROOT, normalize(path).replace(/^(\.\.[/\\])+/, ''));
     if (!filePath.startsWith(ROOT)) {
