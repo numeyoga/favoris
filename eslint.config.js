@@ -29,5 +29,15 @@ export default [
       globals: { ...globals.node },
     },
   },
+  // Tests e2e Playwright : code Node + code exécuté dans la page (page.evaluate),
+  // d'où les globals navigateur en plus.
+  {
+    files: ['tests/e2e/**/*.{js,mjs}'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
   prettier,
 ];

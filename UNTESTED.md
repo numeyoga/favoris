@@ -1,53 +1,40 @@
-# Fonctionnalités non couvertes par les tests automatisés
+# Couverture des tests & fonctionnalités non couvertes
 
-Les tests unitaires (Vitest) couvrent toute la **logique pure** de l'application
-(`public/assets/core.js`) et le **moteur de synchronisation** (`public/assets/sync/engine.js`).
-Voir `tests/core.test.js` et `tests/sync-engine.test.js`, qui servent aussi de
-documentation exécutable.
+## Ce qui est couvert automatiquement
 
-Les éléments ci-dessous ne sont **pas** couverts par des tests automatisés, soit
-parce qu'ils dépendent fortement du DOM/navigateur, soit parce qu'ils touchent un
-service réseau externe. Ils sont à vérifier manuellement (voir « Vérification
-manuelle » plus bas).
+- **Tests unitaires (Vitest)** — `tests/*.test.js`
+  - `tests/core.test.js` : logique pure (`public/assets/core.js`) — uid, slugify,
+    favicon, makeSpaceId, isSpaceSynced, recherche, formes de données, suppression
+    lien/tag, réorganisation (`moveItem`).
+  - `tests/sync-engine.test.js` : moteur de synchronisation (`engine.js`) avec un
+    test double mémoire — périmètre, invisibilité des espaces locaux, basculement,
+    fusion d'index multi-appareils.
+- **Tests de bout en bout (Playwright)** — `tests/e2e/*.spec.js`, navigateur réel
+  - `app.spec.js` : amorçage, rendu des liens, recherche + état « aucun résultat »,
+    ajout/suppression de lien, mode édition, bascule + persistance du thème,
+    création/changement/renommage d'espace.
+  - `sync.spec.js` : synchronisation par espace **via un test double du stockage
+    remote** (adapter mémoire injecté dans la page, `tests/e2e/helpers/memory-sync.js`)
+    — local par défaut, activation, tombstone à la mise en local, non-fuite du nom
+    et du contenu d'un espace local, synchronisation manuelle.
 
-## Interface (DOM) — `public/favoris.html`
+Les tests servent aussi de **documentation exécutable** des fonctionnalités.
 
-- **Rendu** : `render()`, `renderSpaceChip()`, regroupement des liens par tag,
-  cartes de tags, état vide, état « aucun résultat ».
-- **Menu des espaces** : `openSpaceMenu()` / `renderList()` — affichage, sélection,
-  renommage en ligne, duplication, suppression, bascule de synchronisation (☁️),
-  indicateur `· local`.
-- **Modales** : ajout/édition de lien (`openLinkModal`), édition de tag, et la
-  modale de synchronisation (`public/assets/sync/ui.js`).
-- **Glisser-déposer** : le câblage DOM des événements `dragstart`/`dragover`/`drop`
-  pour réordonner liens et cartes. _La transformation pure sous-jacente
-  (`moveItem`) est, elle, testée dans `core.js`._
-- **Barre d'outils** : recherche (champ), bascule mode édition, bascule de thème
-  clair/sombre et sa persistance (`favoris.theme`), raccourcis clavier.
-- **Presse-papier / toasts** : `copyText()`, `toast()`.
+## Ce qui n'est pas couvert (et pourquoi)
 
-## Persistance et amorçage — `public/favoris.html`
+- **Adapter Appwrite réel** (`public/assets/sync/adapter-appwrite.js`) et flux
+  **magic-link** : dépendent du réseau et du SDK externe. Le _contrat_ qu'ils
+  implémentent est, lui, exercé par le test double (unitaire et e2e).
+- **Modale de synchronisation** (`public/assets/sync/ui.js`) : formulaire de
+  configuration/connexion. La logique sous-jacente du moteur est couverte.
+- **Gestes de glisser-déposer** (pointeur) : le câblage `dragstart`/`drop` n'est
+  pas piloté en e2e (fragile en headless). La transformation pure `moveItem` est
+  testée unitairement.
+- **Import / Export JSON** et **« Tout effacer »** (menu ⋯) : non encore scriptés
+  en e2e (manipulent le système de fichiers / des confirmations).
 
-- `ensureSpaces()` (migration depuis l'ancienne clé unique `favoris.v1`),
-  `loadSpaces` / `saveSpaces`, `loadCurrentSpaceId` / `setCurrentSpace`,
-  `loadData` / `save`, `spaceLinkCount`.
-  Ces fonctions sont couplées au `localStorage` réel et à l'état mutable du module ;
-  leur logique de fond (formes de données) est testée indirectement via `core.js`.
+## Vérification manuelle (résiduelle)
 
-## Synchronisation — couche réseau
-
-- `public/assets/sync/adapter-appwrite.js` : client Appwrite (SDK chargé en lazy),
-  authentification par magic-link (`signIn`, `completeFromUrl`), `pull`/`push`/`remove`.
-  Non testé car dépendant du réseau et du SDK externe ; exclu de la couverture.
-- `public/assets/sync/index.js` : point d'entrée (enregistrement de l'adapter,
-  démarrage, branchement UI).
-- `public/assets/sync/ui.js` : modale de configuration/connexion/état.
-
-## Vérification manuelle
-
-1. Servir le dossier : `python3 -m http.server` dans `public/`, ouvrir `favoris.html`.
-2. Créer/renommer/dupliquer/supprimer des espaces ; ajouter/éditer/supprimer des
-   liens et des tags ; réordonner par glisser-déposer ; rechercher ; basculer le
-   thème ; basculer un espace en synchronisé/local (☁️).
-3. Pour la synchronisation réseau, suivre `DOCS-SYNC.md` (backend Appwrite), ou
-   injecter un adapter mémoire en console comme dans `tests/sync-engine.test.js`.
+Pour les points ci-dessus : servir `public/` (`node tests/e2e/static-server.mjs`
+ou `python3 -m http.server`), puis tester import/export, glisser-déposer, et la
+synchro réseau réelle en suivant `DOCS-SYNC.md`.
