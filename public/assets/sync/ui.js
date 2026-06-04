@@ -211,9 +211,9 @@ function openModal(sync) {
         close();
       } catch (e) {
         console.warn(e);
-        toast(e.message || "Échec de l’envoi");
+        toast(e.message || "Échec de l'envoi");
         send.disabled = false;
-        send.textContent = ‘Recevoir le lien’;
+        send.textContent = 'Recevoir le lien';
       }
     };
     foot.appendChild(reconf);

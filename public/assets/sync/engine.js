@@ -145,6 +145,7 @@ export const sync = {
         await this.pullAndApply();
       } catch (e) {
         if (e && e.code === 401) this._user = null;
+        this._error = e.message || String(e);
         throw e;
       }
     }
