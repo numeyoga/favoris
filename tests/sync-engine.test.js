@@ -75,6 +75,7 @@ beforeEach(async () => {
   sync.config = null;
   sync.adapter = null;
   sync._user = null;
+  sync._error = null;
   await sync.applyConfig({ provider: 'memory', settings: {} });
 });
 
@@ -182,6 +183,45 @@ describe('Fusion de l’index multi-appareils (_mergeSpacesIndex)', () => {
     writeSpaces([sp('a', false)]);
     const merged = sync._mergeSpacesIndex(JSON.stringify([sp('a', false)]));
     expect(JSON.parse(merged)).toHaveLength(1);
+  });
+});
+
+describe('Gestion des erreurs (401 / permissions)', () => {
+  it("status() expose error:null en absence d'erreur", () => {
+    expect(sync.status().error).toBeNull();
+  });
+
+  it("un 401 dans pull reinitialise _user et expose le message d'erreur dans status()", async () => {
+    // Simule un adapter dont pull() lève une AppwriteException 401.
+    const err401 = Object.assign(new Error('The current user is not authorized'), { code: 401 });
+    const failAdapter = {
+      ...memoryAdapter,
+      id: 'fail',
+      async currentUser() {
+        return { id: 'u1', email: 'test@example.com' };
+      },
+      async pull() {
+        throw err401;
+      },
+    };
+    sync.register(failAdapter);
+    sync._error = null;
+
+    // _activate() doit attraper le 401, remettre _user à null et propager.
+    sync.config = { provider: 'fail', settings: {} };
+    await sync._activate().catch(() => {});
+
+    expect(sync._user).toBeNull();
+    expect(sync.status().error).toBe('The current user is not authorized');
+  });
+
+  it('_error est effacé au début de chaque _activate()', async () => {
+    sync._error = 'ancienne erreur';
+    // _activate() avec le bon adapter (memoryAdapter) doit réinitialiser _error.
+    sync.config = { provider: 'memory', settings: {} };
+    await sync._activate();
+
+    expect(sync._error).toBeNull();
   });
 });
 
