@@ -1,7 +1,7 @@
 // ============================================================
 // Logique « pure » de l'application (sans DOM ni stockage)
 // ============================================================
-// Module ES natif (aucun framework) importé par favoris.html ET par les tests.
+// Module ES natif (aucun framework) importé par index.html ET par les tests.
 // Tout ce qui est testable sans navigateur vit ici : constantes, fabrique
 // d'identifiants, slug, recherche, formes de données et transformations.
 

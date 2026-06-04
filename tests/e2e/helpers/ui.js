@@ -3,7 +3,7 @@ import { expect } from '@playwright/test';
 
 // Charge l'app et attend que le moteur de synchro soit exposé.
 export async function openApp(page) {
-  await page.goto('/favoris.html');
+  await page.goto('/index.html');
   await page.waitForFunction(() => !!window.favorisSync);
   await expect(page.locator('#space-label')).not.toHaveText('—');
 }
