@@ -111,8 +111,12 @@ export const sync = {
     this.loadMeta();
     this.installShim();
     this.loadConfig();
+    console.log('[sync] init — config chargée :', this.config ? `provider=${this.config.provider}` : 'aucune');
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && this._user) this.pullAndApply().catch(() => {});
+      if (!document.hidden && this._user) {
+        console.log('[sync] reprise au premier plan → pull');
+        this.pullAndApply().catch(() => {});
+      }
     });
     if (this.config) {
       try {
@@ -136,18 +140,25 @@ export const sync = {
     this._error = null;
     const adapter = this.adapters[this.config.provider];
     if (!adapter) throw new Error('Adapter inconnu : ' + this.config.provider);
+    console.log('[sync] activation — provider :', this.config.provider);
     this.adapter = adapter;
     await adapter.init(this.config.settings);
     if (adapter.completeFromUrl) await adapter.completeFromUrl();
     this._user = await adapter.currentUser();
     if (this._user) {
+      console.log('[sync] utilisateur connecté :', this._user.email);
       try {
         await this.pullAndApply();
       } catch (e) {
-        if (e && e.code === 401) this._user = null;
+        if (e && e.code === 401) {
+          console.warn('[sync] session expirée (401) → déconnexion');
+          this._user = null;
+        }
         this._error = e.message || String(e);
         throw e;
       }
+    } else {
+      console.log('[sync] aucun utilisateur connecté');
     }
   },
 
@@ -164,9 +175,11 @@ export const sync = {
   // ---- Auth (déléguée à l'adapter) ---------------------------
   async connect(email) {
     if (!this.adapter) throw new Error('Aucun backend configuré');
+    console.log('[sync] envoi du magic-link →', email);
     await this.adapter.signIn(email); // envoie le magic-link ; retour géré au reload
   },
   async signOut() {
+    console.log('[sync] déconnexion');
     if (this.adapter) await this.adapter.signOut();
     this._user = null;
     this.emit();
@@ -250,37 +263,51 @@ export const sync = {
 
   schedulePush() {
     clearTimeout(this.pushTimer);
+    console.log('[sync] push différé dans 1,5 s');
     this.pushTimer = setTimeout(() => this.pushDirty().catch(() => {}), 1500);
   },
 
   // ---- Synchronisation ---------------------------------------
   async pushDirty() {
     if (!this.adapter || !this._user) return;
-    for (const key of Object.keys(this.meta)) {
+    const dirty = Object.keys(this.meta).filter((k) => !this.meta[k].synced);
+    if (dirty.length === 0) {
+      console.log('[sync] push — rien à envoyer');
+      return;
+    }
+    console.log(`[sync] push — ${dirty.length} clé(s) à envoyer :`, dirty);
+    for (const key of dirty) {
       const m = this.meta[key];
-      if (m.synced) continue;
       try {
-        if (m.deleted) await this.adapter.remove(this.app, key, m.t);
-        else
+        if (m.deleted) {
+          console.log('[sync] push — suppression (tombstone) :', key);
+          await this.adapter.remove(this.app, key, m.t);
+        } else {
+          console.log('[sync] push — envoi :', key);
           await this.adapter.push(
             this.app,
             key,
             this._filterPushValue(key, localStorage.getItem(key)),
             m.t
           );
+        }
         m.synced = true;
         this.saveMeta();
+        console.log('[sync] push — succès :', key);
       } catch (e) {
-        console.warn('[sync] push', key, e);
+        console.warn('[sync] push — erreur sur', key, e);
       }
     }
+    console.log('[sync] push — terminé');
     this.emit();
   },
 
   async pullAndApply() {
     if (!this.adapter || !this._user) return;
+    console.log('[sync] pull → récupération des données distantes…');
     const remote = await this.adapter.pull(this.app);
     const remoteEmpty = Object.keys(remote).length === 0;
+    console.log(`[sync] pull — ${Object.keys(remote).length} clé(s) reçue(s) :`, Object.keys(remote));
 
     // Amorçage du premier appariement : on date les clés locales encore
     // sans métadonnée. Remote vide => on adopte le local (timestamp récent,
@@ -311,13 +338,21 @@ export const sync = {
           // Le distant gagne -> on applique sans re-marquer « sale ».
           // Cas spécial de l'index : on fusionne pour préserver les espaces
           // locaux, absents du distant par construction.
-          if (r.deleted) this._origRemove(key);
-          else if (key === 'favoris.spaces') this._origSet(key, this._mergeSpacesIndex(r.value));
-          else this._origSet(key, r.value);
+          if (r.deleted) {
+            console.log('[sync] pull — suppression distante appliquée :', key);
+            this._origRemove(key);
+          } else if (key === 'favoris.spaces') {
+            console.log('[sync] pull — fusion index des espaces :', key);
+            this._origSet(key, this._mergeSpacesIndex(r.value));
+          } else {
+            console.log('[sync] pull — mise à jour locale :', key);
+            this._origSet(key, r.value);
+          }
           this.meta[key] = { t: remoteT, deleted: !!r.deleted, synced: true };
           changed = true;
         } else if (localT >= 0 && (!r || localT > remoteT)) {
           // Le local gagne (ou le distant l'ignore) -> à pousser.
+          console.log('[sync] pull — clé locale plus récente, sera poussée :', key);
           if (!lm) this.meta[key] = { t: localT, deleted: !localExists, synced: false };
           else lm.synced = false;
         }
@@ -327,13 +362,19 @@ export const sync = {
     }
 
     this.saveMeta();
-    if (changed && typeof window.favorisApplyExternalChange === 'function') {
-      window.favorisApplyExternalChange();
+    if (changed) {
+      console.log('[sync] pull — changements distants appliqués → rechargement UI');
+      if (typeof window.favorisApplyExternalChange === 'function') {
+        window.favorisApplyExternalChange();
+      }
+    } else {
+      console.log('[sync] pull — aucun changement distant');
     }
     await this.pushDirty();
   },
 
   async syncNow() {
+    console.log('[sync] synchronisation manuelle déclenchée');
     if (this._user) await this.pullAndApply();
   },
 
