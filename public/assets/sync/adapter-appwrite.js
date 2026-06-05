@@ -45,6 +45,7 @@ const adapter = {
     this._client = new Client().setEndpoint(settings.endpoint).setProject(settings.projectId);
     this._account = new Account(this._client);
     this._db = new Databases(this._client);
+    console.log('[sync:appwrite] client initialisé — endpoint :', settings.endpoint, '/ project :', settings.projectId);
   },
 
   // Au retour du magic-link, l'URL porte ?userId=&secret= -> on crée la session.
@@ -53,10 +54,12 @@ const adapter = {
     const userId = p.get('userId'),
       secret = p.get('secret');
     if (!userId || !secret) return;
+    console.log('[sync:appwrite] magic-link détecté — création de la session…');
     try {
       await this._account.createSession(userId, secret);
+      console.log('[sync:appwrite] session créée avec succès');
     } catch (e) {
-      console.warn('[appwrite] session', e);
+      console.warn('[sync:appwrite] échec création session', e);
     }
     p.delete('userId');
     p.delete('secret');
@@ -67,7 +70,9 @@ const adapter = {
   async signIn(email) {
     const { ID } = await sdk();
     const redirect = location.origin + location.pathname; // doit être déclaré comme plateforme web
+    console.log('[sync:appwrite] envoi magic-link →', email, '/ redirect :', redirect);
     await this._account.createMagicURLToken(ID.unique(), email, redirect);
+    console.log('[sync:appwrite] magic-link envoyé');
   },
 
   async signOut() {
@@ -98,6 +103,7 @@ const adapter = {
   async pull(app) {
     const { Query } = await sdk();
     const out = {};
+    console.log('[sync:appwrite] pull — requête pour app :', app);
     const r = await this._db.listDocuments(this._cfg.databaseId, this._cfg.collectionId, [
       Query.equal('app', app),
       Query.limit(200),
@@ -105,6 +111,7 @@ const adapter = {
     for (const d of r.documents) {
       out[d.key] = { value: d.data, updatedAt: d.updatedAt, deleted: !!d.deleted };
     }
+    console.log(`[sync:appwrite] pull — ${r.documents.length} document(s) reçu(s)`);
     return out;
   },
 
@@ -114,6 +121,7 @@ const adapter = {
     const existing = await this._find(app, key);
     const payload = { app, key, data: value, updatedAt: t, deleted: false };
     if (existing) {
+      console.log('[sync:appwrite] push — mise à jour document :', key);
       await this._db.updateDocument(
         this._cfg.databaseId,
         this._cfg.collectionId,
@@ -121,6 +129,7 @@ const adapter = {
         payload
       );
     } else {
+      console.log('[sync:appwrite] push — création document :', key);
       await this._db.createDocument(
         this._cfg.databaseId,
         this._cfg.collectionId,
@@ -139,10 +148,13 @@ const adapter = {
   async remove(app, key, t) {
     const existing = await this._find(app, key);
     if (existing) {
+      console.log('[sync:appwrite] remove — tombstone pour :', key);
       await this._db.updateDocument(this._cfg.databaseId, this._cfg.collectionId, existing.$id, {
         deleted: true,
         updatedAt: t,
       });
+    } else {
+      console.log('[sync:appwrite] remove — document inexistant, rien à faire :', key);
     }
   },
 };
