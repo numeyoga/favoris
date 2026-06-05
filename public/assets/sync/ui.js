@@ -165,9 +165,7 @@ function openModal(sync) {
         el(
           'p',
           null,
-          '<span style="color:var(--cv-fg-danger);font-size:12px">Erreur : ' +
-            s.error +
-            '</span>'
+          '<span style="color:var(--cv-fg-danger);font-size:12px">Erreur : ' + s.error + '</span>'
         )
       );
     }

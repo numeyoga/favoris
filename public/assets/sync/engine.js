@@ -111,7 +111,10 @@ export const sync = {
     this.loadMeta();
     this.installShim();
     this.loadConfig();
-    console.log('[sync] init — config chargée :', this.config ? `provider=${this.config.provider}` : 'aucune');
+    console.log(
+      '[sync] init — config chargée :',
+      this.config ? `provider=${this.config.provider}` : 'aucune'
+    );
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden && this._user) {
         console.log('[sync] reprise au premier plan → pull');
@@ -307,7 +310,10 @@ export const sync = {
     console.log('[sync] pull → récupération des données distantes…');
     const remote = await this.adapter.pull(this.app);
     const remoteEmpty = Object.keys(remote).length === 0;
-    console.log(`[sync] pull — ${Object.keys(remote).length} clé(s) reçue(s) :`, Object.keys(remote));
+    console.log(
+      `[sync] pull — ${Object.keys(remote).length} clé(s) reçue(s) :`,
+      Object.keys(remote)
+    );
 
     // Amorçage du premier appariement : on date les clés locales encore
     // sans métadonnée. Remote vide => on adopte le local (timestamp récent,
