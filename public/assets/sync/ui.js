@@ -12,6 +12,19 @@ function el(tag, cls, html) {
   return e;
 }
 
+function syncToast(msg) {
+  if (typeof window.toast === 'function') window.toast(msg);
+}
+
+function countSyncedSpaces() {
+  try {
+    const spaces = JSON.parse(localStorage.getItem('favoris.spaces') || '[]');
+    return Array.isArray(spaces) ? spaces.filter((s) => s && s.synced === true).length : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
 export function initUI(sync) {
   const btn = document.getElementById('sync-btn');
   if (!btn) return;
@@ -35,6 +48,22 @@ export function initUI(sync) {
 
   sync.on(paint);
   paint(sync.status());
+
+  // Toast de démarrage : état de synchronisation au chargement de la page.
+  const s0 = sync.status();
+  if (s0.user) {
+    const n = countSyncedSpaces();
+    const label =
+      n === 0
+        ? 'aucun espace synchronisé'
+        : n === 1
+          ? '1 espace synchronisé'
+          : n + ' espaces synchronisés';
+    syncToast('Connecté · ' + s0.user.email + ' · ' + label);
+  } else if (s0.configured) {
+    syncToast('Synchronisation configurée — connexion requise');
+  }
+
   btn.onclick = () => openModal(sync);
 }
 
@@ -52,9 +81,7 @@ function openModal(sync) {
   function close() {
     root.innerHTML = '';
   }
-  function toast(msg) {
-    if (typeof window.toast === 'function') window.toast(msg);
-  }
+  const toast = syncToast;
 
   // État local du formulaire (provider sélectionné quand non configuré).
   const status0 = sync.status();
