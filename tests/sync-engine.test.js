@@ -12,7 +12,7 @@
 // non patchable ainsi ; on fournit donc un localStorage minimal en mémoire,
 // fidèle au contrat réellement utilisé par le moteur.
 
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { sync } from '../public/assets/sync/engine.js';
 
 // localStorage en mémoire (le shim du moteur peut réassigner setItem dessus).
@@ -248,5 +248,96 @@ describe('Pull/merge de bout en bout', () => {
       .map((s) => s.id)
       .sort();
     expect(local).toEqual(['local-only', 'shared']);
+  });
+});
+
+describe('Notifications (toasts)', () => {
+  let toastMessages;
+
+  beforeEach(() => {
+    toastMessages = [];
+    globalThis.window.toast = (msg) => toastMessages.push(msg);
+  });
+
+  afterEach(() => {
+    delete globalThis.window.toast;
+  });
+
+  it('pullAndApply({ manual }) notifie "À jour" quand aucun changement distant', async () => {
+    await sync.pullAndApply({ manual: true });
+    expect(toastMessages).toContain('À jour');
+  });
+
+  it('pullAndApply({ manual }) notifie le nombre de mises à jour reçues', async () => {
+    const later = Date.now() + 10_000;
+    remote['favoris.spaces'] = {
+      value: JSON.stringify([sp('a', true)]),
+      updatedAt: later,
+      deleted: false,
+    };
+    remote['favoris.v1:a'] = {
+      value: JSON.stringify({ links: [] }),
+      updatedAt: later,
+      deleted: false,
+    };
+    await sync.pullAndApply({ manual: true });
+    expect(toastMessages.some((m) => /mise.+à jour.+reçue/.test(m))).toBe(true);
+  });
+
+  it('pullAndApply({ initial }) ne notifie rien, même avec des changements distants', async () => {
+    const later = Date.now() + 10_000;
+    remote['favoris.spaces'] = {
+      value: JSON.stringify([sp('a', true)]),
+      updatedAt: later,
+      deleted: false,
+    };
+    remote['favoris.v1:a'] = {
+      value: JSON.stringify({ links: [] }),
+      updatedAt: later,
+      deleted: false,
+    };
+    await sync.pullAndApply({ initial: true });
+    expect(toastMessages).toHaveLength(0);
+  });
+
+  it('pullAndApply() sans options ne notifie pas quand rien ne change', async () => {
+    await sync.pullAndApply();
+    expect(toastMessages).toHaveLength(0);
+  });
+
+  it('pullAndApply() sans options notifie quand des changements distants arrivent', async () => {
+    const later = Date.now() + 10_000;
+    // Clé distante plus récente que la métadonnée locale connue.
+    sync.meta['favoris.v1:a'] = { t: 0, deleted: false, synced: true };
+    remote['favoris.v1:a'] = {
+      value: JSON.stringify({ links: [{ url: 'https://test' }] }),
+      updatedAt: later,
+      deleted: false,
+    };
+    await sync.pullAndApply();
+    expect(toastMessages.some((m) => /mise.+à jour.+reçue/.test(m))).toBe(true);
+  });
+
+  it('pushDirty() autonome notifie "Envoi en cours…" puis "Synchronisé"', async () => {
+    // Marquer deux clés comme sales directement dans la méta.
+    writeSpaces([sp('a', true)]);
+    localStorage.setItem('favoris.v1:a', JSON.stringify({ links: [] }));
+    // Le shim a déjà marqué les clés comme sales via _touch.
+    await sync.pushDirty();
+    expect(toastMessages).toContain('Envoi en cours…');
+    expect(toastMessages).toContain('Synchronisé');
+  });
+
+  it('pushDirty() appelé depuis pullAndApply ne notifie pas (évite le double toast)', async () => {
+    sync.meta['favoris.spaces'] = { t: 1, deleted: false, synced: false };
+    writeSpaces([sp('a', true)]);
+    sync._inPullAndApply = true;
+    try {
+      await sync.pushDirty();
+    } finally {
+      sync._inPullAndApply = false;
+    }
+    expect(toastMessages).not.toContain('Envoi en cours…');
+    expect(toastMessages).not.toContain('Synchronisé');
   });
 });
