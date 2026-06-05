@@ -45,7 +45,12 @@ const adapter = {
     this._client = new Client().setEndpoint(settings.endpoint).setProject(settings.projectId);
     this._account = new Account(this._client);
     this._db = new Databases(this._client);
-    console.log('[sync:appwrite] client initialisé — endpoint :', settings.endpoint, '/ project :', settings.projectId);
+    console.log(
+      '[sync:appwrite] client initialisé — endpoint :',
+      settings.endpoint,
+      '/ project :',
+      settings.projectId
+    );
   },
 
   // Au retour du magic-link, l'URL porte ?userId=&secret= -> on crée la session.
