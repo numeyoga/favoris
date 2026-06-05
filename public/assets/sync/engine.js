@@ -46,6 +46,7 @@ export const sync = {
   _user: null,
   _error: null,
   applying: false, // garde anti-boucle pendant l'application du distant
+  _inPullAndApply: false,
   pushTimer: null,
   listeners: new Set(),
 
@@ -65,6 +66,10 @@ export const sync = {
         fn(s);
       } catch (e) {}
     });
+  },
+
+  _notify(msg) {
+    if (typeof window.toast === 'function') window.toast(msg);
   },
 
   status() {
@@ -151,7 +156,7 @@ export const sync = {
     if (this._user) {
       console.log('[sync] utilisateur connecté :', this._user.email);
       try {
-        await this.pullAndApply();
+        await this.pullAndApply({ initial: true });
       } catch (e) {
         if (e && e.code === 401) {
           console.warn('[sync] session expirée (401) → déconnexion');
@@ -279,6 +284,7 @@ export const sync = {
       return;
     }
     console.log(`[sync] push — ${dirty.length} clé(s) à envoyer :`, dirty);
+    if (!this._inPullAndApply) this._notify('Envoi en cours…');
     for (const key of dirty) {
       const m = this.meta[key];
       try {
@@ -302,86 +308,104 @@ export const sync = {
       }
     }
     console.log('[sync] push — terminé');
+    if (!this._inPullAndApply) this._notify('Synchronisé');
     this.emit();
   },
 
-  async pullAndApply() {
+  async pullAndApply({ manual = false, initial = false } = {}) {
     if (!this.adapter || !this._user) return;
     console.log('[sync] pull → récupération des données distantes…');
-    const remote = await this.adapter.pull(this.app);
-    const remoteEmpty = Object.keys(remote).length === 0;
-    console.log(
-      `[sync] pull — ${Object.keys(remote).length} clé(s) reçue(s) :`,
-      Object.keys(remote)
-    );
-
-    // Amorçage du premier appariement : on date les clés locales encore
-    // sans métadonnée. Remote vide => on adopte le local (timestamp récent,
-    // donc poussé). Remote non vide => compte existant, on laisse le distant
-    // l'emporter (timestamp 0) sauf édition locale ultérieure réelle.
-    const seedT = remoteEmpty ? Date.now() : 0;
-    for (const key of this._localSyncedKeys()) {
-      if (!this.meta[key]) this.meta[key] = { t: seedT, deleted: false, synced: false };
-    }
-
-    const keys = new Set([
-      ...Object.keys(remote),
-      ...Object.keys(this.meta),
-      ...this._localSyncedKeys(),
-    ]);
-
-    let changed = false;
-    this.applying = true;
+    this._inPullAndApply = true;
     try {
-      for (const key of keys) {
-        const r = remote[key];
-        const localExists = localStorage.getItem(key) != null;
-        const lm = this.meta[key];
-        const localT = lm ? lm.t : localExists ? 0 : -1;
-        const remoteT = r ? r.updatedAt : -1;
+      const remote = await this.adapter.pull(this.app);
+      const remoteEmpty = Object.keys(remote).length === 0;
+      console.log(
+        `[sync] pull — ${Object.keys(remote).length} clé(s) reçue(s) :`,
+        Object.keys(remote)
+      );
 
-        if (r && remoteT > localT) {
-          // Le distant gagne -> on applique sans re-marquer « sale ».
-          // Cas spécial de l'index : on fusionne pour préserver les espaces
-          // locaux, absents du distant par construction.
-          if (r.deleted) {
-            console.log('[sync] pull — suppression distante appliquée :', key);
-            this._origRemove(key);
-          } else if (key === 'favoris.spaces') {
-            console.log('[sync] pull — fusion index des espaces :', key);
-            this._origSet(key, this._mergeSpacesIndex(r.value));
-          } else {
-            console.log('[sync] pull — mise à jour locale :', key);
-            this._origSet(key, r.value);
+      // Amorçage du premier appariement : on date les clés locales encore
+      // sans métadonnée. Remote vide => on adopte le local (timestamp récent,
+      // donc poussé). Remote non vide => compte existant, on laisse le distant
+      // l'emporter (timestamp 0) sauf édition locale ultérieure réelle.
+      const seedT = remoteEmpty ? Date.now() : 0;
+      for (const key of this._localSyncedKeys()) {
+        if (!this.meta[key]) this.meta[key] = { t: seedT, deleted: false, synced: false };
+      }
+
+      const keys = new Set([
+        ...Object.keys(remote),
+        ...Object.keys(this.meta),
+        ...this._localSyncedKeys(),
+      ]);
+
+      let changesApplied = 0;
+      this.applying = true;
+      try {
+        for (const key of keys) {
+          const r = remote[key];
+          const localExists = localStorage.getItem(key) != null;
+          const lm = this.meta[key];
+          const localT = lm ? lm.t : localExists ? 0 : -1;
+          const remoteT = r ? r.updatedAt : -1;
+
+          if (r && remoteT > localT) {
+            // Le distant gagne -> on applique sans re-marquer « sale ».
+            // Cas spécial de l'index : on fusionne pour préserver les espaces
+            // locaux, absents du distant par construction.
+            if (r.deleted) {
+              console.log('[sync] pull — suppression distante appliquée :', key);
+              this._origRemove(key);
+            } else if (key === 'favoris.spaces') {
+              console.log('[sync] pull — fusion index des espaces :', key);
+              this._origSet(key, this._mergeSpacesIndex(r.value));
+            } else {
+              console.log('[sync] pull — mise à jour locale :', key);
+              this._origSet(key, r.value);
+            }
+            this.meta[key] = { t: remoteT, deleted: !!r.deleted, synced: true };
+            changesApplied++;
+          } else if (localT >= 0 && (!r || localT > remoteT)) {
+            // Le local gagne (ou le distant l'ignore) -> à pousser.
+            console.log('[sync] pull — clé locale plus récente, sera poussée :', key);
+            if (!lm) this.meta[key] = { t: localT, deleted: !localExists, synced: false };
+            else lm.synced = false;
           }
-          this.meta[key] = { t: remoteT, deleted: !!r.deleted, synced: true };
-          changed = true;
-        } else if (localT >= 0 && (!r || localT > remoteT)) {
-          // Le local gagne (ou le distant l'ignore) -> à pousser.
-          console.log('[sync] pull — clé locale plus récente, sera poussée :', key);
-          if (!lm) this.meta[key] = { t: localT, deleted: !localExists, synced: false };
-          else lm.synced = false;
+        }
+      } finally {
+        this.applying = false;
+      }
+
+      this.saveMeta();
+      if (changesApplied > 0) {
+        console.log('[sync] pull — changements distants appliqués → rechargement UI');
+        if (typeof window.favorisApplyExternalChange === 'function') {
+          window.favorisApplyExternalChange();
+        }
+      } else {
+        console.log('[sync] pull — aucun changement distant');
+      }
+      await this.pushDirty();
+
+      if (!initial) {
+        if (changesApplied > 0) {
+          const n = changesApplied;
+          this._notify(n === 1 ? '1 mise à jour reçue' : n + ' mises à jour reçues');
+        } else if (manual) {
+          this._notify('À jour');
         }
       }
     } finally {
-      this.applying = false;
+      this._inPullAndApply = false;
     }
-
-    this.saveMeta();
-    if (changed) {
-      console.log('[sync] pull — changements distants appliqués → rechargement UI');
-      if (typeof window.favorisApplyExternalChange === 'function') {
-        window.favorisApplyExternalChange();
-      }
-    } else {
-      console.log('[sync] pull — aucun changement distant');
-    }
-    await this.pushDirty();
   },
 
   async syncNow() {
     console.log('[sync] synchronisation manuelle déclenchée');
-    if (this._user) await this.pullAndApply();
+    if (this._user) {
+      this._notify('Synchronisation en cours…');
+      await this.pullAndApply({ manual: true });
+    }
   },
 
   _localSyncedKeys() {
