@@ -168,6 +168,23 @@ describe('Basculement de la synchronisation par espace', () => {
   });
 });
 
+describe('Nettoyage des méta obsolètes (espace redevenu local)', () => {
+  it("ne ressuscite pas un document distant supprimé pour un espace n'étant plus synchronisé", async () => {
+    // Méta héritée d'une ancienne synchro (espace passé en local depuis, ou
+    // poussé avant l'introduction de l'opt-in par espace) : la clé existe
+    // toujours en local mais l'espace correspondant est désormais local.
+    writeSpaces([sp('default', false, 'Pro')]);
+    localStorage.setItem('favoris.v1:default', JSON.stringify({ links: [{ url: 'https://pro' }] }));
+    sync.meta['favoris.v1:default'] = { t: 100, deleted: false, synced: true };
+
+    // Le document a été supprimé côté distant (ex. nettoyage manuel) : pull = vide.
+    await sync.pullAndApply({ manual: true });
+
+    expect(remote['favoris.v1:default']).toBeUndefined();
+    expect(sync.meta['favoris.v1:default']).toBeUndefined();
+  });
+});
+
 describe('Fusion de l’index multi-appareils (_mergeSpacesIndex)', () => {
   it('réinjecte les espaces locaux absents du distant', () => {
     writeSpaces([sp('a', true), sp('b', false)]);
