@@ -317,6 +317,19 @@ export const sync = {
     console.log('[sync] pull → récupération des données distantes…');
     this._inPullAndApply = true;
     try {
+      // Purge des méta déjà réconciliées (synced) dont la clé ne correspond
+      // plus à un espace actuellement synchronisé (ex. espace repassé en
+      // local, ou résidu d'avant l'opt-in par espace). Sans ça, si son
+      // double distant disparaît (suppression manuelle, etc.), la boucle de
+      // réconciliation la croit « plus récente que le distant » et la
+      // repousse — ressuscitant des données qui ne doivent plus quitter
+      // l'appareil. Les tombstones en cours d'envoi (synced === false)
+      // sont préservés : pushDirty doit pouvoir les envoyer même si
+      // isSyncedKey ne les reconnaît plus.
+      for (const key of Object.keys(this.meta)) {
+        if (this.meta[key].synced && !isSyncedKey(key)) delete this.meta[key];
+      }
+
       const remote = await this.adapter.pull(this.app);
       const remoteEmpty = Object.keys(remote).length === 0;
       console.log(
